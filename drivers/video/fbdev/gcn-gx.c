@@ -284,6 +284,10 @@ static bool gx_scale_native_preserve_fence;
 module_param_named(scale_native_preserve_fence, gx_scale_native_preserve_fence, bool, 0444);
 MODULE_PARM_DESC(scale_native_preserve_fence,
 		 "Fence and snapshot destination preservation in the native trace");
+static bool gx_scale_native_horizontal_split;
+module_param_named(scale_native_horizontal_split, gx_scale_native_horizontal_split, bool, 0444);
+MODULE_PARM_DESC(scale_native_horizontal_split,
+		 "Halve horizontal primitive height in the native rectangle trace");
 static bool gx_scale_native_split;
 module_param_named(scale_native_split, gx_scale_native_split, bool, 0444);
 MODULE_PARM_DESC(scale_native_split,
@@ -5568,7 +5572,8 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 	trace = READ_ONCE(gx_scale_trace) && focused;
 	split_horizontal = (focused && gx_scale_split_reduce) ||
 		(trace && gx_scale_gpu_split) ||
-		(system_focused && gx_scale_system_split);
+		(system_focused && gx_scale_system_split) ||
+		(native_trace && gx_scale_native_horizontal_split);
 	split_vertical = (focused && gx_scale_split_reduce) ||
 		(trace && gx_scale_texture_half_rows) ||
 		(offset_focused && gx_scale_offset_split) ||
@@ -5820,6 +5825,12 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 	}
 	if (system_trace)
 		pr_info("gcn-gx: system-horizontal seq=%u split=%u quads=%u bytes=%u hash=%08x\n",
+			trace_sequence, split_horizontal,
+			(split_horizontal ? 2 : 1) *
+			gx_nearest_run_count(src_rect_width, dst_rect_width),
+			fifo_pos, gx_hash_pending_commands());
+	if (native_trace)
+		pr_info("gcn-gx: native-horizontal seq=%u split=%u quads=%u bytes=%u hash=%08x\n",
 			trace_sequence, split_horizontal,
 			(split_horizontal ? 2 : 1) *
 			gx_nearest_run_count(src_rect_width, dst_rect_width),

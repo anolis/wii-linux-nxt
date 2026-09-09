@@ -18340,3 +18340,21 @@ preservation checkpoint. There are 320 native horizontal runs; doubling yields
 budget. Compare all stages, then use same-module switches to retain failing
 controls. Both stages can fail in this workload; do not treat this upstream
 failure as evidence that the earlier outside-pixel fault never existed.
+
+#### Combine independent native horizontal/final controls (2026-09-08)
+
+Add scale_native_horizontal_split (default off), effective only in native
+trace, splitting horizontal primitives at y=120. Existing horizontal FIFO
+checks count 320 selected runs, 640 quads/51200 vertex bytes plus state/header
+and reserved submission trailer. Keep independent final split and preservation
+fence switches. Log authored horizontal counts/bytes/hash alongside final logs.
+
+PowerPC W=1 build, strict checkpatch (zero errors/warnings/checks) and
+`git diff --check` pass. Candidate SHA-256:
+`68f7ff42de9958953f4a5af6e95903e84a7f3a432a78c37d86eecf773bb7556b`.
+Run the initial 120-frame native-tiled offscreen control with both native
+splits, native trace and preservation fence, plus earlier split switches.
+Stop on client failure; audit every intermediate summary even on client pass.
+A clean result permits same-module final-only control by disabling horizontal
+split. This is not yet 2,000-frame endurance or trace-free acceptance. No
+hardware result yet; installed provider unchanged, scratch on dev drive.
