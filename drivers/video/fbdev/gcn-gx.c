@@ -369,6 +369,9 @@ MODULE_PARM_DESC(scale_bounded_final, "Experimental: generic final nearest runs 
 static bool gx_scale_bounded_horizontal;
 module_param_named(scale_bounded_horizontal, gx_scale_bounded_horizontal, bool, 0444);
 MODULE_PARM_DESC(scale_bounded_horizontal, "Experimental: horizontal nearest runs in at most 120-pixel pieces");
+static bool gx_scale_bounded_coord_cache;
+module_param_named(scale_bounded_coord_cache, gx_scale_bounded_coord_cache, bool, 0444);
+MODULE_PARM_DESC(scale_bounded_coord_cache, "Experimental: cache repeated bounded strip texture coordinates");
 static unsigned int gx_scale_bounded_batch_quads = 600;
 module_param_named(scale_bounded_batch_quads, gx_scale_bounded_batch_quads, uint, 0444);
 MODULE_PARM_DESC(scale_bounded_batch_quads, "Experimental bounded final batch limit: 400 or 600 quads");
@@ -4052,7 +4055,16 @@ static int gx_draw_bounded_vertical_runs(u16 x, u16 y, u16 width,
 	u32 remaining = pieces * runs;
 	u32 batch = 0, batch_quads, emitted = 0;
 	u16 dst_start = 0;
+	u32 boundaries[DIV_ROUND_UP(640, 64) + 1];
+	u32 boundary;
 	int ret;
+
+	if (width > 640)
+		return -E2BIG;
+	if (gx_scale_bounded_coord_cache)
+		for (boundary = 0; boundary <= pieces; boundary++)
+			boundaries[boundary] = gx_semantic_texcoord_bits_phase(
+				min_t(u32, boundary * 64, width), texture_width, -2);
 
 	BUILD_BUG_ON(600 * 80 + 3 > GX_FIFO_SIZE - 256);
 	/* Complete preservation/state before the bounded active vertex batches. */
@@ -4081,8 +4093,10 @@ static int gx_draw_bounded_vertical_runs(u16 x, u16 y, u16 width,
 			u16 right = min_t(u16, column + 64, width);
 
 			gx_emit_textured_rect(x + column, y + dst_start, x + right, y + dst_end,
-				gx_semantic_texcoord_bits_phase(column, texture_width, -2), t,
-				gx_semantic_texcoord_bits_phase(right, texture_width, -2), t);
+				gx_scale_bounded_coord_cache ? boundaries[column / 64] :
+					gx_semantic_texcoord_bits_phase(column, texture_width, -2), t,
+				gx_scale_bounded_coord_cache ? boundaries[column / 64 + 1] :
+					gx_semantic_texcoord_bits_phase(right, texture_width, -2), t);
 			remaining--;
 			if (++emitted != batch_quads)
 				continue;
@@ -4116,7 +4130,16 @@ static int gx_draw_bounded_horizontal_runs(u16 src_width, u16 texture_width,
 	u32 remaining = runs * DIV_ROUND_UP(height, 120);
 	u32 count = min_t(u32, remaining, 640), before = fifo_pos;
 	u16 left = 0;
+	u32 boundaries[DIV_ROUND_UP(528, 120) + 1];
+	u32 boundary;
 	int ret;
+
+	if (height > 528)
+		return -E2BIG;
+	if (gx_scale_bounded_coord_cache)
+		for (boundary = 0; boundary <= DIV_ROUND_UP(height, 120U); boundary++)
+			boundaries[boundary] = gx_semantic_texcoord_bits_phase(
+				min_t(u32, boundary * 120, height), texture_height, -2);
 
 	BUILD_BUG_ON(640 * 80 + 8 > GX_FIFO_SIZE - 256);
 	if (fifo_pos > GX_FIFO_SIZE - 256 - 8 - count * 80)
@@ -4137,8 +4160,10 @@ static int gx_draw_bounded_horizontal_runs(u16 src_width, u16 texture_width,
 			u16 bottom = min_t(u16, top + 120, height);
 
 			gx_emit_textured_rect(left, top, right, bottom, s,
-				gx_semantic_texcoord_bits_phase(top, texture_height, -2), s,
-				gx_semantic_texcoord_bits_phase(bottom, texture_height, -2));
+				gx_scale_bounded_coord_cache ? boundaries[top / 120] :
+					gx_semantic_texcoord_bits_phase(top, texture_height, -2), s,
+				gx_scale_bounded_coord_cache ? boundaries[top / 120 + 1] :
+					gx_semantic_texcoord_bits_phase(bottom, texture_height, -2));
 			remaining--;
 			if (++emitted != count)
 				continue;

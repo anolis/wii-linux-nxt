@@ -821,3 +821,19 @@ arrays. Compare matching iteration indices/patterns when one case stops early.
 Thread CPU time includes GPU completion polling and is not pure command-building
 cost. These short, first-fault-censored samples do not establish a failure rate
 or a stable latency distribution.
+
+### Bounded strip coordinate cache
+
+`bounded-both-system-profile-cached` and `bounded-both-regression-cached` add
+`scale_bounded_coord_cache=1` to the opt-in bounded helpers. The runner verifies
+the parameter. This caches only the repeated strip-boundary texture coordinates:
+11 entries maximum for 64-pixel-wide pieces and six for 120-pixel-high pieces.
+The arrays consume 44 and 24 bytes respectively, with no persistent allocation.
+The original uncached mode remains the default for same-module comparisons.
+
+For 320x240 to 640x480, boundary divisions fall from 6080 to 14 per call. Source
+run coordinates, primitive order, batch sizes, state submissions, and copy
+fences remain identical. The host test compiles the actual helpers and compares
+all authored bytes and submission boundaries for 1024 geometry/direction cases,
+including tails and 400/600-quad final batches. Hardware pixel and timing tests
+are still required because byte equality does not establish runtime reliability.

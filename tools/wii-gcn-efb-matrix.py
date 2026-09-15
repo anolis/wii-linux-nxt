@@ -224,6 +224,12 @@ CASES.append(dict(case('bounded-both-system-profile', [], '', 0, 0), bounded=Tru
                   bounded_workload='system', bounded_horizontal=True, system_content=True,
                   system_timed=True, system_profile=True, experimental=True))
 
+CASES.append(dict(case('bounded-both-system-profile-cached', [], '', 0, 0), bounded=True,
+                  bounded_workload='system', bounded_horizontal=True, system_content=True,
+                  system_timed=True, system_profile=True, coord_cache=True, experimental=True))
+CASES.append(dict(case('bounded-both-regression-cached', [], '', 0, 0), bounded=True,
+                  regression=True, bounded_horizontal=True, coord_cache=True, experimental=True))
+
 CASES.append(dict(case('bounded-both-system-sched', [], '', 0, 0), bounded=True,
                   bounded_workload='system', bounded_horizontal=True, system_content=True,
                   system_timed=True, system_profile=True, system_sched=True, experimental=True))
@@ -263,6 +269,9 @@ def audit_regression(log, client_log, requested, rc):
 
 def audit_bounded_regression(log, client_log, spec, requested, rc):
     result = audit_regression(log, client_log, requested, rc)
+    if spec.get('coord_cache'):
+        require(log.count('parameter scale_bounded_coord_cache verified Y') == 1,
+                'bounded coordinate cache parameter not verified')
     result['case'] = spec['name']
     starts = re.findall(r'bounded-begin seq=(\d+) x=(\d+) y=(\d+) width=(\d+) src_height=(\d+) dst_height=(\d+) runs=(\d+) quads=(\d+)', log)
     batches = re.findall(r'bounded-batch seq=(\d+) batch=(\d+) quads=(\d+) bytes=(\d+) last=([01])', log)
@@ -1044,6 +1053,9 @@ def main():
                     command[command.index('--client-args') + 1] = f'--system-sched{"-loop" if spec.get("system_sched_loop") else ""}-repeat {args.iterations}'
                 if spec.get('bounded_horizontal'):
                     command[-1] += ' scale_bounded_horizontal=1'
+                if spec.get('coord_cache'):
+                    command[-1] += ' scale_bounded_coord_cache=1'
+                    command += ['--expect-param', 'scale_bounded_coord_cache=Y']
                 if spec.get('native') or spec.get('regression') or spec.get('bounded'):
                     expect = 'Y' if spec.get('identity') or spec.get('regression') or spec.get('bounded') else 'N'
                     command += ['--expect-param', 'scale_system_split=Y' if spec.get('bounded_horizontal_split')

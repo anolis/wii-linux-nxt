@@ -890,6 +890,22 @@ class AuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-content'], 16, 0)
 
+    def test_verified_coordinate_cache_keeps_complete_pixel_and_batch_evidence(self):
+        log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
+            for name in ('bounded-cache-verified','bounded-cache-verified-client')]
+        result = matrix.audit_bounded_workload(log, client,
+            CASES['bounded-both-system-profile-cached'], 32, 0)
+        self.assertEqual(result['completed'],32)
+        self.assertEqual(len(result['cpu_samples_ns']),32)
+        self.assertIn('parameter scale_identity_quad verified Y',log)
+
+    def test_coordinate_cache_rejects_capture_missing_its_parameter_check(self):
+        log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
+            for name in ('bounded-cache-profile','bounded-cache-profile-client')]
+        with self.assertRaises(ValueError):
+            matrix.audit_bounded_workload(log, client,
+                CASES['bounded-both-system-profile-cached'], 32, 0)
+
     def test_baseline_profile_failure_keeps_only_clean_timing_samples(self):
         log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
             for name in ('system-baseline-profile-failure', 'system-baseline-profile-failure-client')]

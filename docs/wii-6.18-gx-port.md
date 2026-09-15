@@ -22480,3 +22480,14 @@ failed at (541,296) on attempt 14 in round one; round two passed 32. Bounded
 rendering passed all 64 calls. Clean matching iterations, failed-attempt
 exclusion, source captures and caveats are recorded in the fault investigation
 report. All 86 audit tests pass; installed driver and system state unchanged.
+
+September 15 bounded-coordinate optimization: opt-in caching reduces repeated
+strip-boundary divisions from 6080 to 14 for 320x240 to 640x480. Actual helper
+command streams match byte-for-byte across 1024 host geometry/direction cases.
+Verified reverse-order hardware comparisons show median thread CPU savings of
+0.55–1.08 ms per call. All 320 qualified cached content calls passed (98.3 million
+pixel checks), along with expanded cached and default regressions. All 89 tests
+pass. Fixed the runner to verify every repeated `--expect-param`; captures made
+before that fix are excluded from qualified timing results. Cache remains off
+by default, and the installed provider is unchanged. See the investigation
+report for immutable captures, hashes, and remaining qualification scope.

@@ -34,3 +34,10 @@ between ioctl windows. Raw trace SHA256:
 `wii-gcn-matrix-cpu-pair-20260915-r1/system-baseline-profile`; 13 clean calls,
 then a destination mismatch at (541,296) on attempt 14. Tests require the failed
 attempt's profile record but exclude it from clean timing arrays.
+
+`bounded-cache-profile{,-client}.txt.gz` preserves the first coordinate-cache
+capture (`wii-gcn-matrix-coord-cache-20260915-r1`). The runner then checked only
+the last repeated `--expect-param`; the current audit rejects this capture as
+missing explicit cache-parameter verification. Do not use it as qualified data.
+`bounded-cache-verified{,-client}.txt.gz` is the corrected round-four capture,
+with both cache and identity parameters verified and all 32 calls passing.

@@ -2249,3 +2249,68 @@ audit tests pass, including the real baseline failure fixture requiring the
 failed attempt's profile record while excluding it from clean timing arrays.
 Module/lock absent, tracefs still unmounted, boot UUID/printk and installed
 provider hash unchanged. No production default or installed binary changed.
+
+## September 15: cache repeated bounded strip coordinates
+
+The bounded helpers recomputed identical strip-boundary texture coordinates
+for every nearest-neighbor run. Their conversion uses integer software IEEE754
+division. Added opt-in `scale_bounded_coord_cache=1` to compute those boundaries
+once per helper invocation. The vertical helper uses at most 11 u32 entries
+(44 bytes), horizontal six (24 bytes), on the stack. No persistent allocation,
+texture-buffer change, geometry change, reordered primitive, or removed fence.
+For 320x240 to 640x480, repeated boundary divisions fall from 6080 to 14; the
+per-source-run coordinate calculation remains unchanged.
+
+A host harness compiles the actual driver helper functions, runs cached and
+uncached variants, and compares all command bytes and submission boundaries.
+All 1024 geometry/direction pairs match, including 1-pixel and maximum extents,
+partial strips, multi-batch geometry, and final batch limits 400 and 600.
+This is command equivalence evidence, not a hardware reliability guarantee.
+The module builds W=1 clean; experimental module SHA256:
+`6622626caa185a8f7e2cbbe7c74fa1c46d7ec65e2fa61744e8756e9a54ca116e`.
+
+Initial captures exposed a runner limitation: repeated `--expect-param` silently
+replaced earlier checks. Round one passed pixels, but did not explicitly verify
+the cache parameter. The new strict audit rejects that evidence; round two
+correctly ended ERROR for the missing verification. Updated the runner to retain,
+validate, and check every supplied parameter. Round three's cached expanded
+regression passed with both cache and identity parameters verified. Its following
+case hit `ule: command not found` before testing; the runner file was reformatted
+while a shell was reading it, explaining the damaged command read. Kept the
+archive as an infrastructure error and repeated with runner source held stable.
+Do not count those interrupted cases as pixel faults or qualified timings.
+
+All these archives use prefix `/media/anolis/dev/wii-gcn-matrix-coord-cache-20260915-`.
+Use r4 and r5 for the verified reverse-order CPU comparison, and the successful
+`bounded-both-regression-cached` case in r3 for expanded geometry coverage.
+
+| Verified round / order | Uncached CPU median ms | Cached CPU median ms | Matched CPU saving median ms |
+|---|---:|---:|---:|
+| r4 uncached first | 22.370704 | 21.242784 | 1.076592 |
+| r5 cached first | 21.986624 | 21.422064 | 0.552544 |
+
+Both modes passed all 32 calls in each round. Every one of the 64 matched
+iteration CPU deltas favored caching; combined median saving 0.820960 ms,
+mean 0.917818 ms. The 7.179104 ms maximum paired delta includes an uncached
+CPU outlier and should not be described as the normal saving. Different run
+orders show a material magnitude difference, so retain the 0.55–1.08 ms
+per-round median range rather than claiming a fixed 1.1 ms gain. These are
+thread CPU measurements including GPU completion polling, not GPU-only timing.
+Verified comparison and analysis source are archived at
+`/media/anolis/dev/wii-gcn-coord-cache-comparison-20260915`.
+
+The follow-up `-long` suite passed 256/256 cached eight-pattern calls (78643200
+pixel checks), then the default render regression passed. Together with the 64
+verified cached timing calls, this is 320 clean cached content calls and
+98304000 pixel checks, plus the expanded cached geometry regression. This is a
+useful targeted validation, not the earlier 1000-call qualification repeated
+with the new optimization. Keep `scale_bounded_coord_cache` default false.
+
+All six suite manifests and the comparison manifest verify. Current audits
+accept the qualified r3 regression and all r4/r5/long cases; the old missing
+parameter-verification fixture is explicitly rejected. All 89 tests pass,
+including the command-equivalence harness and both real capture controls.
+Shell syntax and diff checks pass. Hardware cleanup confirms module/lock absent,
+tracefs unmounted, boot UUID and printk unchanged, and installed module SHA256
+`a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+The experimental module was only loaded temporarily; no production installation.

@@ -24,7 +24,7 @@ Options:
   --module-args ARGS   arguments passed to insmod
   --reuse-remote       require checksum-matched files already in /tmp
   --defer-output PATH  Save remote client output and print it after the test
-  --expect-param N=V  Verify a loaded module parameter before testing
+  --expect-param N=V  Verify a loaded module parameter (repeatable)
   --quiet-kernel      Keep kernel diagnostics in dmesg, suppress tty spam
   --keep-loaded        leave gcn_gx loaded after a successful test
   --allow-dirty        permit testing from an uncommitted source tree
@@ -50,7 +50,7 @@ module_args=
 reuse_remote=0
 keep_loaded=0
 quiet_kernel=0
-expect_param=
+expect_params=()
 defer_output=
 allow_dirty=0
 
@@ -61,7 +61,7 @@ while (($#)); do
 		shift
 		;;
 	--expect-param)
-		expect_param=$2
+		expect_params+=("$2")
 		shift
 		;;
 	--quiet-kernel)
@@ -178,10 +178,12 @@ if [[ ! $client_args =~ ^[A-Za-z0-9_./,=+\ -]*$ ]]; then
 	exit 2
 fi
 
-if [[ -n $expect_param && ! $expect_param =~ ^[A-Za-z0-9_]+=[A-Za-z0-9_]+$ ]]; then
-	printf 'Invalid expected parameter: %s\n' "$expect_param" >&2
-	exit 2
-fi
+for expect_param in "${expect_params[@]}"; do
+	if [[ ! $expect_param =~ ^[A-Za-z0-9_]+=[A-Za-z0-9_]+$ ]]; then
+		printf 'Invalid expected parameter: %s\n' "$expect_param" >&2
+		exit 2
+	fi
+done
 
 if [[ -n $defer_output && ! $defer_output =~ ^/tmp/gcn-matrix-[a-f0-9]{32}\.client$ ]]; then
 	printf 'Invalid deferred output path: %s\n' "$defer_output" >&2
@@ -325,7 +327,7 @@ else
 	remote_exec "insmod $remote_module $module_args"
 	loaded=1
 fi
-if [[ -n $expect_param ]]; then
+for expect_param in "${expect_params[@]}"; do
 	param_name=${expect_param%%=*}
 	param_value=${expect_param#*=}
 	actual_value=$(remote_exec "cat /sys/module/gcn_gx/parameters/$param_name")
@@ -335,7 +337,7 @@ if [[ -n $expect_param ]]; then
 		exit 1
 	}
 	remote_notice "parameter $param_name verified $actual_value"
-fi
+done
 remote_notice "running hardware test"
 set +e
 if [[ -n $defer_output ]]; then
