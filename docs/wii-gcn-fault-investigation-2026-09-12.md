@@ -2159,3 +2159,47 @@ checks pass. Final module/lock cleanup, boot UUID and printk are unchanged;
 installed provider SHA256
 `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
 No rendering code, client binary or driver default changed this step.
+
+## September 15: continuous short scheduler/workqueue capture
+
+Added `bounded-both-system-sched-loop`, capped at 64 iterations in the matrix.
+The client keeps the isolated trace active across allocation, source generation,
+verification and ioctl gaps; per-ioctl markers still define measured windows.
+The audit tracks work identities across those gaps. Gated captures clear state
+at each window end. The continuous trace exposed nested softirq
+`tcp_tsq_workfn` during a worker's `sdio_irq_work`: the audit uses a stack for
+interrupt-context nesting, rejects mismatched ends and overlapping task-context
+work, and resumes the outer label. Missing starts remain unknown. These are
+scheduled intervals, potentially including untraced interrupts, not exact
+function CPU time.
+
+`/media/anolis/dev/wii-gcn-matrix-sched-loop-20260915-r1` passed 64/64 iterations
+and 19660800 destination pixel checks with the unchanged opt-in both-stage
+module. Supplement `/media/anolis/dev/wii-gcn-scheduler-loop-20260915-r1` contains
+5279 records, zero overrun/commit-overrun/dropped events, and 267224 buffer bytes
+within the 1024 KiB allocation. Completed transfer matches device SHA256
+`b2085cec6b2734e13ad547058edab50139156afbabc7fdfd8e0084f4f50a4eb3`.
+
+Across ioctl windows, known competing work accounts for 161.043 ms in
+`sdio_irq_work`, 34.500 ms in `drm_fb_helper_damage_work`, and 5.294 ms in
+`b43_tx_work`. The unknown category also includes ordinary non-workqueue tasks;
+the dmesg collector alone accounts for 82.707 ms scheduled in total.
+
+The slowest ioctl, iteration 35, took 41.144313 ms. Its marker window contained
+18.567 ms scheduled to other tasks, including systemd-udevd/three udev workers,
+SDIO, framebuffer damage work, b43 transmit work, and the collector. Iteration
+39 took 39.033070 ms with 16.509 ms other scheduled time: 9.705 ms in SDIO work
+and 5.011 ms in framebuffer damage work. Iteration 19 took 36.513514 ms,
+including 7.115 ms in framebuffer damage work. This identifies concrete
+competitors in current tails; it does not retroactively identify the missing
+function in the prior capture's iteration 63 or reproduce the earlier 127 ms
+maximum. Pixel-fault causality and scheduler latency remain separate questions.
+
+Strict client build and all 85 audit tests pass, including compressed real
+whole-loop evidence and synthetic attribution checks. Suite and supplement
+manifests verify. Removed the owned instance and restored tracefs to unmounted;
+module and matrix lock absent, boot UUID/printk/installed module hash unchanged.
+Driver code/defaults and system scheduling/network settings unchanged. The next
+useful performance work is to distinguish repeatable rendering cost from these
+measured competitors; another undirected fault sweep would not explain these
+timing tails.

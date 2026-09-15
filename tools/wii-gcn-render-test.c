@@ -17,6 +17,7 @@
 
 static bool system_profile;
 static bool system_sched;
+static bool system_sched_loop;
 static int system_trace_on = -1, system_trace_marker = -1;
 
 #define TEST_WIDTH 256U
@@ -3909,7 +3910,7 @@ static int system_trace_event(unsigned int iteration, bool begin)
 	char marker[80];
 	int length;
 
-	if (begin && pwrite(system_trace_on, "1", 1, 0) != 1)
+	if (!system_sched_loop && begin && pwrite(system_trace_on, "1", 1, 0) != 1)
 		return -1;
 	length = snprintf(marker, sizeof(marker), "GCN %s iteration=%u\n", begin ? "begin" : "end", iteration);
 	if (write(system_trace_marker, marker, length) != length) {
@@ -3917,7 +3918,7 @@ static int system_trace_event(unsigned int iteration, bool begin)
 			fail("disable scheduler trace");
 		return -1;
 	}
-	if (!begin && pwrite(system_trace_on, "0", 1, 0) != 1)
+	if (!system_sched_loop && !begin && pwrite(system_trace_on, "0", 1, 0) != 1)
 		return -1;
 	return 0;
 }
@@ -4351,7 +4352,8 @@ int main(int argc, char **argv)
 			    !strcmp(argv[1], "--wide-reduce-uniform-only");
 	bool reduce_content = argc > 2 && !strcmp(argv[1], "--reduce-content-repeat");
 	bool reduce_repeat = reduce_content || (argc > 2 && !strcmp(argv[1], "--reduce-repeat"));
-	bool sched_repeat = argc > 2 && !strcmp(argv[1], "--system-sched-repeat");
+	bool sched_loop_repeat = argc > 2 && !strcmp(argv[1], "--system-sched-loop-repeat");
+	bool sched_repeat = sched_loop_repeat || (argc > 2 && !strcmp(argv[1], "--system-sched-repeat"));
 	bool profile_repeat = sched_repeat || (argc > 2 && !strcmp(argv[1], "--system-profile-repeat"));
 	bool system_content = profile_repeat || (argc > 2 && !strcmp(argv[1], "--system-content-repeat"));
 	bool system_repeat = system_content || (argc > 2 && !strcmp(argv[1], "--system-enlarge-repeat"));
@@ -4377,6 +4379,7 @@ int main(int argc, char **argv)
 
 	system_profile = profile_repeat;
 	system_sched = sched_repeat;
+	system_sched_loop = sched_loop_repeat;
 	if (offset_repeat || system_repeat || reduce_repeat) {
 		char *end;
 		unsigned long count = strtoul(argv[2], &end, 10);
@@ -4477,6 +4480,12 @@ int main(int argc, char **argv)
 				system_trace_marker = open("/sys/kernel/tracing/instances/wii-gcn-sched/trace_marker", O_WRONLY);
 				if (system_trace_on < 0 || system_trace_marker < 0) {
 					fail("open isolated scheduler trace");
+					goto out_close;
+				}
+				if (system_sched_loop &&
+				    (pwrite(system_trace_on, "1", 1, 0) != 1 ||
+				     write(system_trace_marker, "GCN loop begin\n", 15) != 15)) {
+					fail("enable whole-loop scheduler trace");
 					goto out_close;
 				}
 			}
@@ -4633,6 +4642,9 @@ int main(int argc, char **argv)
 
 out_close:
 	if (system_trace_on >= 0) {
+		if (system_sched_loop && system_trace_marker >= 0 &&
+		    write(system_trace_marker, "GCN loop end\n", 13) != 13)
+			fail("end whole-loop scheduler trace");
 		if (pwrite(system_trace_on, "0", 1, 0) != 1)
 			fail("disable scheduler trace");
 		close(system_trace_on);

@@ -794,3 +794,21 @@ checksum verification and successful audit; failures preserve evidence.
 The progress bar advances when deferred client output becomes available.
 Use short matched pairs in both orders to compare capture overhead, not
 these small batches to qualify intermittent-fault reliability.
+
+### Whole-loop scheduler capture
+
+`bounded-both-system-sched-loop` uses `--system-sched-loop-repeat N` and the
+same isolated trace instance setup as `bounded-both-system-sched`. The matrix
+limits this case to 64 iterations. Allocate a 1024 KiB instance buffer and enable
+`sched_switch`, `workqueue_execute_start`, and `workqueue_execute_end` before
+running it. Tracing spans allocation, source generation, ioctls, and verification;
+`GCN begin/end iteration=N` still delimit each ioctl observation window.
+`GCN loop begin/end` distinguish continuous capture from the older gated mode.
+
+The scheduler audit tracks work identities across the gaps and reports
+`other_work_scheduled` within each ioctl window. Missing starts remain `unknown`;
+gated captures discard function state after each window. These intervals are
+scheduled time and may include interrupt execution, not exact function CPU time.
+The audit rejects lost entries, incomplete loop markers, and mismatched work ends.
+Archive and checksum the stopped trace before removing the owned instance and
+restoring the original tracefs mount state.

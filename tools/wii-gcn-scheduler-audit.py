@@ -24,26 +24,44 @@ def audit(trace, stats, client):
     windows, active, parsed = [], None, 0
     totals, names = defaultdict(int), {}
     work = []
+    running_work = {}
+    loop, loop_complete = False, False
     for line in trace.splitlines():
         if not line or line.startswith('#'):
             continue
-        m = re.match(r'\s*(.+)-(\d+)\s+\[(\d+)\]\s+\S+\s+(\d+)\.(\d+): (\w+): (.*)$', line)
+        m = re.match(r'\s*(.+)-(\d+)\s+\[(\d+)\]\s+(\S+)\s+(\d+)\.(\d+): (\w+): (.*)$', line)
         require(m, 'unparsed trace record')
         parsed += 1
-        comm, pid, cpu, sec, frac, event, payload = m.groups()
+        comm, pid, cpu, flags, sec, frac, event, payload = m.groups()
         pid = int(pid)
         require(int(cpu) == 0, 'unexpected CPU')
         stamp = int(sec)*1000000000 + int(frac.ljust(9, '0'))
         names[pid] = comm.strip()
+        if event == 'tracing_mark_write' and payload.startswith('GCN loop '):
+            require(active is None, 'loop boundary inside ioctl')
+            if payload == 'GCN loop begin':
+                require(not loop and not loop_complete and not windows, 'wrong loop begin')
+                loop = True
+            elif payload == 'GCN loop end':
+                require(loop and not loop_complete, 'wrong loop end')
+                loop_complete = True
+            else:
+                raise ValueError('unknown loop marker')
+            continue
         marker = re.fullmatch(r'GCN (begin|end) iteration=(\d+)', payload) if event == 'tracing_mark_write' else None
         if marker and marker[1] == 'begin':
-            require(active is None and int(marker[2]) == len(windows), 'wrong begin order')
+            require(not loop_complete and active is None and int(marker[2]) == len(windows), 'wrong begin order')
             active = dict(iteration=len(windows), client_pid=pid, start_ns=stamp,
-                          current=pid, last=stamp, scheduled=defaultdict(int), switches=0)
+                          current=pid, last=stamp, scheduled=defaultdict(int), functions=defaultdict(int), switches=0)
             continue
         if active:
             require(stamp >= active['last'], 'time reversed')
-            active['scheduled'][active['current']] += stamp-active['last']
+            task = active['current']
+            delta = stamp-active['last']
+            active['scheduled'][task] += delta
+            if task != active['client_pid']:
+                function = running_work[task][-1][1] if running_work.get(task) else 'unknown'
+                active['functions'][(task, function)] += delta
             active['last'] = stamp
         if marker:
             require(active and int(marker[2]) == active['iteration'] and pid == active['client_pid']
@@ -59,7 +77,11 @@ def audit(trace, stats, client):
                     totals[task] += ns
             windows.append(dict(iteration=i, client_pid=pid, window_ns=duration,
                                 ioctl_ns=int(timings[i][1]), scheduled_ns=scheduled,
-                                other_scheduled_ns=duration-scheduled.get(pid,0), switches=active['switches']))
+                                other_scheduled_ns=duration-scheduled.get(pid,0), switches=active['switches'],
+                                other_work_scheduled=[dict(pid=p, function=f, scheduled_ns=n)
+                                    for (p,f),n in active['functions'].items()]))
+            if not loop:
+                running_work.clear()
             active = None
         elif event == 'sched_switch':
             switch = re.fullmatch(r'prev_comm=(.*?) prev_pid=(\d+) prev_prio=(\d+) prev_state=(\S+) ==> next_comm=(.*?) next_pid=(\d+) next_prio=(\d+)', payload)
@@ -71,15 +93,28 @@ def audit(trace, stats, client):
                 active['current'] = nxt
                 active['switches'] += 1
         elif event in ('workqueue_execute_start', 'workqueue_execute_end'):
-            work.append(dict(pid=pid, event=event, detail=payload,
+            detail = re.fullmatch(r'work struct (\S+): function (.+)', payload)
+            require(detail, 'malformed workqueue event')
+            identity = (detail[1], detail[2])
+            if event == 'workqueue_execute_start':
+                stack = running_work.setdefault(pid, [])
+                require(not stack or any(c in flags for c in 'sHh'), 'overlapping task-context work')
+                stack.append(identity)
+            else:
+                stack = running_work.get(pid, [])
+                require(not stack or stack[-1] == identity, 'mismatched work end')
+                if stack:
+                    stack.pop()
+            work.append(dict(stamp_ns=stamp, pid=pid, event=event, detail=payload,
                              iteration=active['iteration'] if active else None))
         else:
             raise ValueError('unexpected trace event')
+    require(not loop or loop_complete, 'incomplete whole-loop capture')
     require(active is None and len(windows) == len(timings) and windows, 'incomplete windows')
     require(parsed == int(counts[1]), 'trace entry count mismatch')
     return dict(windows=windows, other_tasks=[dict(pid=p, comm=names[p], scheduled_ns=n)
                 for p,n in sorted(totals.items(), key=lambda item:item[1], reverse=True)],
-                workqueue_events=work, entries=parsed)
+                workqueue_events=work, entries=parsed, whole_loop=loop)
 
 
 def main():

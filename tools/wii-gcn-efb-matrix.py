@@ -224,6 +224,11 @@ CASES.append(dict(case('bounded-both-system-sched', [], '', 0, 0), bounded=True,
                   bounded_workload='system', bounded_horizontal=True, system_content=True,
                   system_timed=True, system_profile=True, system_sched=True, experimental=True))
 
+CASES.append(dict(case('bounded-both-system-sched-loop', [], '', 0, 0), bounded=True,
+                  bounded_workload='system', bounded_horizontal=True, system_content=True,
+                  system_timed=True, system_profile=True, system_sched=True,
+                  system_sched_loop=True, experimental=True))
+
 CASES.append(dict(case('bounded-both-system-profile-deferred', [], '', 0, 0), bounded=True,
                   bounded_workload='system', bounded_horizontal=True, system_content=True,
                   system_timed=True, system_profile=True, deferred=True, experimental=True))
@@ -906,6 +911,8 @@ def main():
     lookup = {c['name']: c for c in CASES}
     require(all(n in lookup for n in names), 'unknown case; use --list')
     selected = [lookup[n] for n in names]
+    require(args.iterations <= 64 or not any(c.get('system_sched_loop') for c in selected),
+            'whole-loop scheduler capture is limited to 64 iterations')
     require(args.iterations <= 8 or not any(c.get('deferred') for c in selected),
             'deferred capture is limited to eight iterations for the 16 KiB kernel log')
     total = sum(1 if c.get('regression') else args.iterations for c in selected)
@@ -1030,7 +1037,7 @@ def main():
                 if spec.get('system_profile'):
                     command[command.index('--client-args') + 1] = f'--system-profile-repeat {args.iterations}'
                 if spec.get('system_sched'):
-                    command[command.index('--client-args') + 1] = f'--system-sched-repeat {args.iterations}'
+                    command[command.index('--client-args') + 1] = f'--system-sched{"-loop" if spec.get("system_sched_loop") else ""}-repeat {args.iterations}'
                 if spec.get('bounded_horizontal'):
                     command[-1] += ' scale_bounded_horizontal=1'
                 if spec.get('native') or spec.get('regression') or spec.get('bounded'):

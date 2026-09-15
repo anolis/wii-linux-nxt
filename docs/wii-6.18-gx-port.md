@@ -22465,3 +22465,11 @@ Evidence: `wii-gcn-matrix-deferred-20260915-r1` through `-r4` and separate
 `wii-gcn-deferred-comparison-20260915` under `/media/anolis/dev`. All 83 audit
 tests, default regression, manifests and cleanup pass. Module/client binaries,
 rendering code, installed driver and production defaults unchanged.
+
+September 15 scheduler follow-up: the bounded whole-loop capture passed 64
+content iterations (19.7 million pixel checks) with zero trace loss. Workqueue
+boundaries now persist across ioctl gaps, identifying SDIO and framebuffer
+damage work in slow calls, plus udev activity in this run's 41.1 ms maximum.
+Nested softirq work is handled explicitly by the audit. All 85 audit tests pass;
+tracefs and hardware cleanup verified. See the fault investigation report for
+capture hashes and timing details. The production driver remains unchanged.

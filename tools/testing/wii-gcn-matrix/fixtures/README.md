@@ -23,3 +23,9 @@ the repository root with:
 ```
 python3 -m unittest discover -s tools/testing/wii-gcn-matrix
 ```
+
+`scheduler-loop-{trace,stats,client}.txt.gz`: 64-iteration whole-loop capture
+from `wii-gcn-scheduler-loop-20260915-r1`, 5279 entries with zero loss. Includes
+nested softirq `tcp_tsq_workfn` within worker execution and work boundaries in
+between ioctl windows. Raw trace SHA256:
+`b2085cec6b2734e13ad547058edab50139156afbabc7fdfd8e0084f4f50a4eb3`.
