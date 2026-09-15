@@ -890,6 +890,24 @@ class AuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-content'], 16, 0)
 
+    def test_quiet_capture_requires_parameters_and_does_not_invent_batch_evidence(self):
+        log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
+            for name in ('bounded-quiet','bounded-quiet-client')]
+        spec = CASES['bounded-both-system-profile-quiet']
+        result = matrix.audit_bounded_workload(log,client,spec,32,0)
+        self.assertEqual(result['completed'],32)
+        self.assertEqual(result['evidence_mode'],'client-pixels-and-verified-parameters')
+        self.assertNotIn('bounded_calls',result)
+        self.assertNotIn('horizontal_command_bytes',result)
+        for field in ('scale_bounded_final','scale_bounded_horizontal','scale_bounded_log',
+                      'scale_bounded_batch_quads','scale_bounded_coord_cache'):
+            with self.assertRaises(ValueError):
+                matrix.audit_bounded_workload(log.replace('parameter '+field+' verified','missing'),client,spec,32,0)
+        with self.assertRaises(ValueError):
+            matrix.audit_bounded_workload(log+'\ngcn-gx: bounded-batch seq=1\n',client,spec,32,0)
+        with self.assertRaises(ValueError):
+            matrix.audit_bounded_workload(log,client,CASES['bounded-both-system-profile-cached'],32,0)
+
     def test_mixed_axis_cache_requires_cross_column_batches(self):
         for limit in (600,400):
             log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()

@@ -22508,3 +22508,13 @@ Both passed, verifying 131072000 destination pixels and the horizontal
 repeat selector, exact matrix geometry audits, and real rejection-control
 fixtures; all 90 tests pass. Driver/module unchanged; cleanup verified. See
 `wii-gcn-matrix-mixed-cache-20260915-{screen,long}` and the investigation report.
+
+September 15 quiet-mode validation: `scale_bounded_log=0` optionally suppresses
+routine helper geometry/batch records, retaining errors and unchanged command
+bytes. The quiet sweep passed 1000/1000 content calls (307.2 million pixel checks)
+and default regression; quiet expanded regression and both 32-call comparisons
+also passed. Kernel captures shrink substantially, but reversed timing results
+do not show a reliable speedup. Quiet audit output explicitly lacks batch-level
+evidence and requires loaded-parameter checks. All 91 tests pass, cleanup and
+archives verify, and logging remains enabled by default. Installed driver
+unchanged; see the fault investigation report for hashes and scope.

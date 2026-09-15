@@ -369,6 +369,9 @@ MODULE_PARM_DESC(scale_bounded_final, "Experimental: generic final nearest runs 
 static bool gx_scale_bounded_horizontal;
 module_param_named(scale_bounded_horizontal, gx_scale_bounded_horizontal, bool, 0444);
 MODULE_PARM_DESC(scale_bounded_horizontal, "Experimental: horizontal nearest runs in at most 120-pixel pieces");
+static bool gx_scale_bounded_log = true;
+module_param_named(scale_bounded_log, gx_scale_bounded_log, bool, 0444);
+MODULE_PARM_DESC(scale_bounded_log, "Emit per-call bounded geometry and batch diagnostics");
 static bool gx_scale_bounded_coord_cache;
 module_param_named(scale_bounded_coord_cache, gx_scale_bounded_coord_cache, bool, 0444);
 MODULE_PARM_DESC(scale_bounded_coord_cache, "Experimental: cache repeated bounded strip texture coordinates");
@@ -4075,8 +4078,9 @@ static int gx_draw_bounded_vertical_runs(u16 x, u16 y, u16 width,
 	if (ret)
 		return ret;
 	fifo_pos = 0;
-	pr_info("gcn-gx: bounded-begin seq=%u x=%u y=%u width=%u src_height=%u dst_height=%u runs=%u quads=%u\n",
-		id, x, y, width, src_height, dst_height, runs, remaining);
+	if (gx_scale_bounded_log)
+		pr_info("gcn-gx: bounded-begin seq=%u x=%u y=%u width=%u src_height=%u dst_height=%u runs=%u quads=%u\n",
+			id, x, y, width, src_height, dst_height, runs, remaining);
 	batch_quads = min_t(u32, remaining, gx_scale_bounded_batch_quads);
 	gx_wr8(0x80);
 	gx_wr16be(4 * batch_quads);
@@ -4100,8 +4104,9 @@ static int gx_draw_bounded_vertical_runs(u16 x, u16 y, u16 width,
 			remaining--;
 			if (++emitted != batch_quads)
 				continue;
-			pr_info("gcn-gx: bounded-batch seq=%u batch=%u quads=%u bytes=%u last=%u\n",
-				id, batch, batch_quads, fifo_pos + 5, !remaining);
+			if (gx_scale_bounded_log)
+				pr_info("gcn-gx: bounded-batch seq=%u batch=%u quads=%u bytes=%u last=%u\n",
+					id, batch, batch_quads, fifo_pos + 5, !remaining);
 			if (!remaining)
 				break;
 			gx_load_bp_reg(0x45000002);
@@ -4144,8 +4149,9 @@ static int gx_draw_bounded_horizontal_runs(u16 src_width, u16 texture_width,
 	BUILD_BUG_ON(640 * 80 + 8 > GX_FIFO_SIZE - 256);
 	if (fifo_pos > GX_FIFO_SIZE - 256 - 8 - count * 80)
 		return -E2BIG;
-	pr_info("gcn-gx: bounded-horizontal-begin seq=%u src_width=%u dst_width=%u height=%u runs=%u quads=%u\n",
-		id, src_width, dst_width, height, runs, remaining);
+	if (gx_scale_bounded_log)
+		pr_info("gcn-gx: bounded-horizontal-begin seq=%u src_width=%u dst_width=%u height=%u runs=%u quads=%u\n",
+			id, src_width, dst_width, height, runs, remaining);
 	gx_wr8(0x80);
 	gx_wr16be(4 * count);
 	while (left < dst_width) {
@@ -4167,8 +4173,9 @@ static int gx_draw_bounded_horizontal_runs(u16 src_width, u16 texture_width,
 			remaining--;
 			if (++emitted != count)
 				continue;
-			pr_info("gcn-gx: bounded-horizontal-batch seq=%u batch=%u quads=%u before=%u bytes=%u last=%u\n",
-				id, batch, count, before, fifo_pos + 5, !remaining);
+			if (gx_scale_bounded_log)
+				pr_info("gcn-gx: bounded-horizontal-batch seq=%u batch=%u quads=%u before=%u bytes=%u last=%u\n",
+					id, batch, count, before, fifo_pos + 5, !remaining);
 			if (!remaining)
 				break;
 			gx_load_bp_reg(0x45000002);

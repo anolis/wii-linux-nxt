@@ -240,6 +240,12 @@ CASES.append(dict(case('bounded-both-system-profile-cached', [], '', 0, 0), boun
 CASES.append(dict(case('bounded-both-regression-cached', [], '', 0, 0), bounded=True,
                   regression=True, bounded_horizontal=True, coord_cache=True, experimental=True))
 
+CASES.append(dict(case('bounded-both-system-profile-quiet', [], '', 0, 0), bounded=True,
+                  bounded_workload='system', bounded_horizontal=True, system_content=True,
+                  system_timed=True, system_profile=True, coord_cache=True, bounded_quiet=True, experimental=True))
+CASES.append(dict(case('bounded-both-regression-quiet', [], '', 0, 0), bounded=True,
+                  regression=True, bounded_horizontal=True, coord_cache=True, bounded_quiet=True, experimental=True))
+
 CASES.append(dict(case('bounded-both-system-sched', [], '', 0, 0), bounded=True,
                   bounded_workload='system', bounded_horizontal=True, system_content=True,
                   system_timed=True, system_profile=True, system_sched=True, experimental=True))
@@ -283,6 +289,14 @@ def audit_bounded_regression(log, client_log, spec, requested, rc):
         require(log.count('parameter scale_bounded_coord_cache verified Y') == 1,
                 'bounded coordinate cache parameter not verified')
     result['case'] = spec['name']
+    if spec.get('bounded_quiet'):
+        for name, value in (('scale_bounded_final','Y'), ('scale_bounded_horizontal','Y'),
+                            ('scale_bounded_log','N'), ('scale_bounded_batch_quads','600')):
+            require(log.count(f'parameter {name} verified {value}') == 1, 'quiet bounded parameter not verified')
+        require(not re.search(r'gcn-gx: bounded-(?:begin|batch|horizontal-begin|horizontal-batch)', log),
+                'unexpected bounded diagnostics in quiet capture')
+        result['evidence_mode'] = 'client-pixels-and-verified-parameters'
+        return result
     starts = re.findall(r'bounded-begin seq=(\d+) x=(\d+) y=(\d+) width=(\d+) src_height=(\d+) dst_height=(\d+) runs=(\d+) quads=(\d+)', log)
     batches = re.findall(r'bounded-batch seq=(\d+) batch=(\d+) quads=(\d+) bytes=(\d+) last=([01])', log)
     require(bool(starts), 'generic bounded path not exercised')
@@ -352,7 +366,7 @@ def audit_bounded_workload(log, client_log, spec, requested, rc):
     }[workload]
     if spec.get('mixed_offset'):
         geometry = [0, 61, 256, 255, 127, 127, 508]
-    if spec.get('bounded_horizontal'):
+    if spec.get('bounded_horizontal') and not spec.get('bounded_quiet'):
         geometry_h = {'offset': [255,256,79,255,255], 'system': [320,640,240,320,640],
                       'reduce-content': [640,320,240,320,640]}[workload]
         if spec.get('mixed_offset'):
@@ -362,9 +376,9 @@ def audit_bounded_workload(log, client_log, spec, requested, rc):
     progress = re.findall(rf'{prefix}: (\d+)/(\d+) iterations', client_log)
     completed = len(progress)
     timings = re.findall(r'SYSTEM TIMING: iteration=(\d+) ns=(\d+) status=(-?\d+)', client_log)
-    checked = len(timings) if spec.get('system_baseline') else result['bounded_calls']
+    checked = len(timings) if spec.get('system_baseline') or spec.get('bounded_quiet') else result['bounded_calls']
     require(progress == [(str(i + 1), str(requested)) for i in range(completed)], 'wrong bounded workload progress')
-    if not spec.get('system_baseline'):
+    if not spec.get('system_baseline') and not spec.get('bounded_quiet'):
         require(result['bounded_geometries'] == [geometry] * checked, 'wrong bounded workload geometry')
     require((rc == 0 and completed == checked == requested) or
             (rc == 1 and completed < requested and checked == completed + 1), 'incomplete bounded workload')
@@ -1069,6 +1083,8 @@ def main():
                     command[command.index('--client-args') + 1] = f'--system-sched{"-loop" if spec.get("system_sched_loop") else ""}-repeat {args.iterations}'
                 if spec.get('bounded_horizontal'):
                     command[-1] += ' scale_bounded_horizontal=1'
+                if spec.get('bounded_quiet'):
+                    command[-1] += ' scale_bounded_log=0'
                 if spec.get('coord_cache'):
                     command[-1] += ' scale_bounded_coord_cache=1'
                     command += ['--expect-param', 'scale_bounded_coord_cache=Y']
@@ -1076,6 +1092,10 @@ def main():
                     expect = 'Y' if spec.get('identity') or spec.get('regression') or spec.get('bounded') else 'N'
                     command += ['--expect-param', 'scale_system_split=Y' if spec.get('bounded_horizontal_split')
                                 else 'scale_identity_quad=' + expect]
+                if spec.get('bounded_quiet'):
+                    for parameter in ('scale_bounded_final=Y', 'scale_bounded_horizontal=Y',
+                                      'scale_bounded_log=N', 'scale_bounded_batch_quads=600'):
+                        command += ['--expect-param', parameter]
                 if spec.get('deferred'):
                     command += ['--defer-output', tag + '.client']
                 if args.allow_dirty:

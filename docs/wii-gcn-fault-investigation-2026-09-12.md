@@ -2396,3 +2396,55 @@ client build and diff checks pass. Final checks confirm module/lock absent,
 tracefs unmounted, boot UUID/printk unchanged, and installed provider SHA256
 `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
 No driver implementation, production default, or installed binary changed.
+
+## September 15: optional quiet bounded rendering
+
+Added `scale_bounded_log`, default true, gating only the four routine geometry
+and batch `pr_info` sites in the bounded helpers. Setting it to 0 leaves errors,
+oracle failures, command generation, batching and completion fences intact.
+The actual-helper command comparison now checks all four cache/log combinations;
+all 91 tests and the W=1 module build pass. Experimental module SHA256:
+`6b0b956f7a02c6e05b22351b86e82b928345affa95cad6bac39b36b071229f64`.
+Client remains `453bc6347bbb72932ad811dd1022cae75cddf6b7aa87a95b983f02e5c93da8e9`.
+
+New quiet profile and regression cases explicitly verify bounded final,
+horizontal, coordinate cache, log-off and the 600-quad limit (plus identity).
+They require all client checks and ordinary provider/cleanup evidence, reject
+unexpected bounded diagnostics, and label results
+`evidence_mode=client-pixels-and-verified-parameters`. They omit helper geometry,
+submission and byte-count fields: quiet captures cannot supply those facts.
+Logged qualification remains the source of detailed batch evidence.
+
+`/media/anolis/dev/wii-gcn-matrix-bounded-quiet-20260915-r1` passed the quiet
+expanded regression, then 32 logged and 32 quiet profile calls. Round `-r2`
+reversed the profile order and both passed 32. The dmesg collector remained
+active in both modes. Comparisons use the same module, client and eight-pattern
+schedule; no priorities or networking settings changed.
+
+| Round / order | Logged CPU median ms | Quiet CPU median ms | Matched CPU saving median ms |
+|---|---:|---:|---:|
+| r1 logged first | 21.017344 | 20.775184 | 0.225488 |
+| r2 quiet first | 21.021776 | 21.303632 | -0.321776 |
+
+The sign reverses with order. Combined median matched saving is -0.110128 ms,
+mean -0.057327 ms. Elapsed medians also reverse: logged/quiet 22.821819/21.121408 ms
+in r1, 25.661325/26.482972 ms in r2. Therefore these samples do not establish a
+reliable speedup. Quiet mode reduces routine logging and is an operational
+option, not a demonstrated latency fix. Keep its default unchanged. The
+comparison source, current re-audits and raw samples are archived at
+`/media/anolis/dev/wii-gcn-quiet-comparison-20260915`.
+
+Each 32-call logged capture contains 22271 bytes/242 lines, versus 1557 bytes/22
+lines for quiet capture, including its extra parameter checks. The `-long`
+suite passed 1000/1000 quiet eight-pattern calls (307200000 destination pixel
+checks) and then default regression. Including the comparison rounds, 1064
+quiet content calls passed, plus the quiet expanded regression. This validates
+the quiet option for the tested workload; it does not recreate unrecorded
+batch evidence or remove the need for diagnostics during future investigations.
+
+All three suite manifests, the comparison manifest and fresh audits verify.
+All 91 tests pass. Final module/lock absent, tracefs unmounted, boot UUID/printk
+unchanged; installed module SHA256 remains
+`a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+The experimental module was loaded only temporarily. Logging still defaults on;
+no installed provider or production defaults changed.

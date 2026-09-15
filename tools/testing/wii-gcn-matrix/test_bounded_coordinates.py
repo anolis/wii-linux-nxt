@@ -39,6 +39,7 @@ typedef uint16_t u16; typedef uint32_t u32; typedef uint64_t u64; typedef int32_
 #define GX_FIFO_SIZE 65536
 static char logbuf[512];
 static bool gx_scale_bounded_coord_cache;
+static bool gx_scale_bounded_log=true;
 static u32 gx_scale_bounded_batch_quads=600, fifo_pos, used;
 static unsigned char stream[2000000], reference[2000000];
 static void gx_wr8(u32 v) { if(used>=sizeof(stream)) abort(); stream[used++]=v; fifo_pos++; }
@@ -71,8 +72,8 @@ int main(void) {
   gx_scale_bounded_batch_quads=n%2?400:600;
   for(unsigned direction=0;direction<2;direction++) {
    unsigned length=0; int previous=0;
-   for(unsigned cache=0;cache<2;cache++) {
-    gx_scale_bounded_coord_cache=cache; used=0; fifo_pos=0;
+   for(unsigned cache=0;cache<4;cache++) {
+    gx_scale_bounded_coord_cache=cache&1; gx_scale_bounded_log=!(cache&2); used=0; fifo_pos=0;
     for(unsigned i=0;i<966;i++) gx_wr8(i);
     int ret=direction ? gx_draw_bounded_horizontal_runs(sw,1024,sh,1024,dw) :
      gx_draw_bounded_vertical_runs(3,7,width,1024,sh,1024,dh);

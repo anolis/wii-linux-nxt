@@ -859,3 +859,20 @@ Final rendering emits 508 quads, either one batch (600 limit) or 400+108.
 The audit requires these exact geometries, batch counts and byte budgets;
 a normal offset run cannot satisfy this case. Both cases enable and verify
 the coordinate cache and stop at the first mismatch.
+
+### Quiet bounded rendering
+
+`scale_bounded_log=0` suppresses the bounded helpers' geometry and batch
+`pr_info` records. It defaults to 1, preserving existing diagnostic suites;
+errors and mismatch reports remain enabled. `bounded-both-system-profile-quiet`
+and `bounded-both-regression-quiet` enable both bounded helpers and coordinate
+caching, disable those records, and explicitly verify all four mode parameters
+and the 600-quad final limit before testing.
+
+Quiet results use `evidence_mode=client-pixels-and-verified-parameters` and omit
+batch counts/geometry/FIFO-byte fields. The client still checks all output
+pixels, preservation where applicable, and cleanup. These results do not replace
+the detailed batch evidence from logged qualification. Unexpected bounded
+records or missing parameter verification are audit errors. Compare the profile
+case with `bounded-both-system-profile-cached` using the same module and client,
+then reverse the order. The dmesg collector remains active in both cases.

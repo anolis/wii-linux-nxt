@@ -47,3 +47,9 @@ with both cache and identity parameters verified and all 32 calls passing.
 forces horizontal 640+125-quad submissions, and final 400+108 or one 508-quad
 submission. Tests reject incorrect final horizontal batch size and substitution
 of the simpler offset geometry.
+
+`bounded-quiet{,-client}.txt.gz`: verified 32-call quiet-mode capture from
+`wii-gcn-matrix-bounded-quiet-20260915-r1`. It has complete client pixel/profile
+records and explicit mode parameter checks, with no per-batch diagnostics.
+Tests reject missing mode checks, unexpected bounded diagnostic records, and
+attempts to treat this as a full batch-evidence capture.
