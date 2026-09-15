@@ -890,6 +890,18 @@ class AuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-content'], 16, 0)
 
+    def test_baseline_profile_failure_keeps_only_clean_timing_samples(self):
+        log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
+            for name in ('system-baseline-profile-failure', 'system-baseline-profile-failure-client')]
+        spec = CASES['system-baseline-profile']
+        result = matrix.audit_bounded_workload(log, client, spec, 32, 1)
+        self.assertEqual((result['status'], result['completed'], result['checked']), ('FAIL',13,14))
+        self.assertEqual(result['first_pixel'], '541,296')
+        self.assertEqual(len(result['cpu_samples_ns']),13)
+        self.assertEqual(len(result['ioctl_samples_ns']),13)
+        with self.assertRaises(ValueError):
+            matrix.audit_bounded_workload(log, client.replace('SYSTEM CPU: iteration=13','missing'), spec, 32, 1)
+
     def test_deferred_capture_requires_complete_unique_markers(self):
         log = gzip.decompress((FIXTURES / 'system-profile-deferred.txt.gz').read_bytes()).decode()
         client = gzip.decompress((FIXTURES / 'system-profile-deferred-client.txt.gz').read_bytes()).decode()

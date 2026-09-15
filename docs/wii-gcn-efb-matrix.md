@@ -812,3 +812,12 @@ scheduled time and may include interrupt execution, not exact function CPU time.
 The audit rejects lost entries, incomplete loop markers, and mismatched work ends.
 Archive and checksum the stopped trace before removing the owned instance and
 restoring the original tracefs mount state.
+
+`system-baseline-profile` runs the same eight-pattern CPU-profile client with
+normal module defaults. Pair it with `bounded-both-system-profile`, then reverse
+the case order in a separate suite. Both cases stop on a pixel mismatch; retain
+the failed attempt's raw profile records but exclude it from clean-call timing
+arrays. Compare matching iteration indices/patterns when one case stops early.
+Thread CPU time includes GPU completion polling and is not pure command-building
+cost. These short, first-fault-censored samples do not establish a failure rate
+or a stable latency distribution.

@@ -29,3 +29,8 @@ from `wii-gcn-scheduler-loop-20260915-r1`, 5279 entries with zero loss. Includes
 nested softirq `tcp_tsq_workfn` within worker execution and work boundaries in
 between ioctl windows. Raw trace SHA256:
 `b2085cec6b2734e13ad547058edab50139156afbabc7fdfd8e0084f4f50a4eb3`.
+
+`system-baseline-profile-failure{,-client}.txt.gz`: first CPU comparison round,
+`wii-gcn-matrix-cpu-pair-20260915-r1/system-baseline-profile`; 13 clean calls,
+then a destination mismatch at (541,296) on attempt 14. Tests require the failed
+attempt's profile record but exclude it from clean timing arrays.

@@ -216,6 +216,10 @@ for name, baseline, content in [('system-baseline-timed', True, False),
                       bounded_horizontal=not baseline, system_baseline=baseline,
                       system_content=content, system_timed=True, experimental=True))
 
+CASES.append(dict(case('system-baseline-profile', [], '', 0, 0), bounded=True,
+                  bounded_workload='system', system_baseline=True, system_content=True,
+                  system_timed=True, system_profile=True, experimental=True))
+
 CASES.append(dict(case('bounded-both-system-profile', [], '', 0, 0), bounded=True,
                   bounded_workload='system', bounded_horizontal=True, system_content=True,
                   system_timed=True, system_profile=True, experimental=True))

@@ -2203,3 +2203,49 @@ Driver code/defaults and system scheduling/network settings unchanged. The next
 useful performance work is to distinguish repeatable rendering cost from these
 measured competitors; another undirected fault sweep would not explain these
 timing tails.
+
+## September 15: reverse-order CPU-cost comparison
+
+Added `system-baseline-profile`, which runs the same eight-pattern
+`--system-profile-repeat` client under normal module defaults. Compared it with
+`bounded-both-system-profile` for 32 requested iterations per case, then reversed
+the case order. No driver/client change, scheduling adjustment, or trace capture
+was needed. Both use the existing temporary module and checksum-verified client.
+
+Archives: `/media/anolis/dev/wii-gcn-matrix-cpu-pair-20260915-r1` and `-r2`.
+Round one baseline stopped on attempt 14 after 13 clean calls: destination
+(541,296), got 0xfff7 versus expected 0xffff (checker pattern, iteration 13).
+The workaround completed all 32. Round two completed all 32 in both cases.
+Thus 45 clean baseline calls, 64 clean workaround calls, and one failed baseline
+attempt were captured. This is another reproduction of a pixel fault under
+normal defaults, not an estimate of an independent failure probability.
+There were 33484800 pixel checks in fully successful iterations.
+
+| Round / order | Baseline CPU median ms | Workaround CPU median ms | Matched CPU delta median ms |
+|---|---:|---:|---:|
+| 1 baseline first | 20.053664 (13 calls) | 22.445104 (32 calls) | 2.318592 (13 pairs) |
+| 2 workaround first | 19.708720 (32 calls) | 22.333408 (32 calls) | 2.595328 (32 pairs) |
+
+Matching the same iteration indices/patterns within each round gives 45 clean
+pairs: median additional CPU time 2.553952 ms, mean 2.534407 ms, range
+2.126144–3.422240 ms. All matched deltas are positive. These are separate runs;
+order effects and the first-fault stopping rule limit distribution claims.
+Thread CPU time includes GPU completion polling, so this is not exclusively
+command emission or texture conversion cost.
+
+Elapsed medians varied more with run order: round one baseline/workaround
+24.895194/28.004313 ms; round two 22.579679/23.902280 ms. The workaround's
+round-two maximum was 53.245992 ms despite a CPU maximum of only 22.484928 ms
+across that case. Together with the scheduler evidence, this separates a
+repeatable roughly 2.3–2.6 ms extra CPU cost from larger elapsed-time tails.
+The next optimization should locate that repeatable cost while preserving the
+bounded geometry; removing the workaround because the baseline is faster would
+reintroduce a reproduced correctness problem.
+
+The independent re-audit and matched samples are archived in
+`/media/anolis/dev/wii-gcn-cpu-comparison-20260915` with analysis/audit source and
+checksums. Original suites remain immutable. All suite manifests verify and 86
+audit tests pass, including the real baseline failure fixture requiring the
+failed attempt's profile record while excluding it from clean timing arrays.
+Module/lock absent, tracefs still unmounted, boot UUID/printk and installed
+provider hash unchanged. No production default or installed binary changed.

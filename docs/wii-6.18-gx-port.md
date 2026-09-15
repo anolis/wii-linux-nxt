@@ -22473,3 +22473,10 @@ damage work in slow calls, plus udev activity in this run's 41.1 ms maximum.
 Nested softirq work is handled explicitly by the audit. All 85 audit tests pass;
 tracefs and hardware cleanup verified. See the fault investigation report for
 capture hashes and timing details. The production driver remains unchanged.
+
+September 15 CPU comparison: two reversed-order 32-call cases isolate roughly
+2.3–2.6 ms additional thread CPU time for bounded rendering. The normal path
+failed at (541,296) on attempt 14 in round one; round two passed 32. Bounded
+rendering passed all 64 calls. Clean matching iterations, failed-attempt
+exclusion, source captures and caveats are recorded in the fault investigation
+report. All 86 audit tests pass; installed driver and system state unchanged.
