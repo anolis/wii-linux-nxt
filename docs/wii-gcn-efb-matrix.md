@@ -837,3 +837,12 @@ fences remain identical. The host test compiles the actual helpers and compares
 all authored bytes and submission boundaries for 1024 geometry/direction cases,
 including tails and 400/600-quad final batches. Hardware pixel and timing tests
 are still required because byte equality does not establish runtime reliability.
+
+The cached-path qualification sweep uses
+`bounded-both-reduce-content-cached,bounded-both-offset-cached,bounded-both-system-profile-cached,bounded-both-regression-cached,render-regression`
+with `--iterations 1000`. This gives 1000 calls per workload and one execution
+of each regression. Reduction cycles eight patterns; offset rendering verifies
+the full destination including preserved surroundings and checks source
+integrity; system enlargement cycles eight patterns with CPU profiling. Each
+workload stops at its first client mismatch. The same geometry/batch audits and
+explicit cache-parameter check apply to every cached case.

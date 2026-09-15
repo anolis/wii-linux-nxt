@@ -209,6 +209,11 @@ for workload in ('offset', 'system', 'reduce-content'):
     CASES.append(dict(case(f'bounded-both-{workload}', [], '', 0, 0), bounded=True,
                       bounded_horizontal=True, bounded_workload=workload, experimental=True))
 
+for workload in ('offset', 'reduce-content'):
+    CASES.append(dict(case(f'bounded-both-{workload}-cached', [], '', 0, 0), bounded=True,
+                      bounded_horizontal=True, bounded_workload=workload,
+                      coord_cache=True, experimental=True))
+
 for name, baseline, content in [('system-baseline-timed', True, False),
                                 ('bounded-both-system-timed', False, False),
                                 ('bounded-both-system-content', False, True)]:

@@ -2314,3 +2314,44 @@ Shell syntax and diff checks pass. Hardware cleanup confirms module/lock absent,
 tracefs unmounted, boot UUID and printk unchanged, and installed module SHA256
 `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
 The experimental module was only loaded temporarily; no production installation.
+
+## September 15: cached workload-family qualification
+
+Extended the matrix with `bounded-both-reduce-content-cached` and
+`bounded-both-offset-cached`, reusing the strict geometry, FIFO-batch, pixel,
+cleanup, and explicit parameter audits. No driver/client binary changes.
+The qualification suite at
+`/media/anolis/dev/wii-gcn-matrix-coord-cache-20260915-qualification` requests
+1000 calls each for reduction content, offset rendering, and system content
+with CPU profiling, followed by cached expanded and default regressions.
+The experimental module remains
+`6622626caa185a8f7e2cbbe7c74fa1c46d7ec65e2fa61744e8756e9a54ca116e`.
+
+Reduction covers 640x240 to 320x120 with eight source patterns and checks 38400
+destination pixels per call. Offset rendering exercises source (0,43)255x79 to
+destination (0,97)256x79, checks all 65536 destination pixels including preserved
+surroundings, and separately verifies source integrity. System enlargement
+covers 320x240 to 640x480 with eight source patterns and checks all 307200
+output pixels. The expanded regression supplies additional tails and batch
+boundaries, including the 765-quad horizontal geometry split into 640+125.
+
+All five cases passed: 1000/1000 reduction, 1000/1000 offset, 1000/1000 system,
+and both regressions. The three repeated workloads account for 411136000
+verified destination pixels, excluding the additional source-integrity and
+regression checks. This completes the planned 1000-call workload-family sweep
+for the cached candidate; it does not prove zero future faults or identify the
+underlying hardware failure mechanism. The cache and bounded helpers remain
+opt-in and no production default was changed.
+
+In the system case, median thread CPU time was 21.733488 ms; elapsed median
+25.729654 ms, observed p95 33.294239 ms and maximum 54.022205 ms. This sweep
+has no paired uncached control, so use the preceding reverse-order experiment
+for performance comparisons. Passing pixels do not imply a hard frame deadline.
+
+Every archived checksum verifies, and a fresh audit of all five cases passes.
+The render client SHA256 is
+`905b43ad160f91195dd0b543fd463ac6dd84ca48e12b2a651fb3e75932e6973f`.
+All 89 existing tests pass. Final checks confirm module/lock absent, tracefs
+unmounted, unchanged boot UUID `444193a6-aee4-4ae3-a619-4f6dd90fccf1` and printk
+`7 4 1 7`, and installed provider SHA256
+`a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.

@@ -22491,3 +22491,12 @@ pass. Fixed the runner to verify every repeated `--expect-param`; captures made
 before that fix are excluded from qualified timing results. Cache remains off
 by default, and the installed provider is unchanged. See the investigation
 report for immutable captures, hashes, and remaining qualification scope.
+
+September 15 cached-path qualification completed: 1000/1000 each for reduction,
+offset rendering and system enlargement, followed by passing expanded cached
+and default regressions. The repeated workloads verified 411136000 destination
+pixels. All archived checksums and fresh audits pass; 89 tests pass. Module and
+client binaries were unchanged from the cache experiment. Cache/bounded helpers
+remain opt-in; installed provider and final Wii state are unchanged. See the
+fault investigation report and `wii-gcn-matrix-coord-cache-20260915-qualification`
+archive for detailed evidence and scope.
