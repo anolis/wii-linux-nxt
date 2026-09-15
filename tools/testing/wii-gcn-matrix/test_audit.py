@@ -890,6 +890,19 @@ class AuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-content'], 16, 0)
 
+    def test_deferred_capture_requires_complete_unique_markers(self):
+        log = gzip.decompress((FIXTURES / 'system-profile-deferred.txt.gz').read_bytes()).decode()
+        client = gzip.decompress((FIXTURES / 'system-profile-deferred-client.txt.gz').read_bytes()).decode()
+        spec = CASES['bounded-both-system-profile-deferred']
+        result = matrix.audit_bounded_workload(log, client, spec, 8, 0)
+        self.assertEqual((result['completed'], result['capture_mode']), (8,'deferred'))
+        for broken in (log.replace('gcn-matrix-deferred begin','missing'),
+                       log.replace('gcn-matrix-deferred end','missing'),
+                       log + log,
+                       log.replace('gcn-matrix-deferred end /tmp/', 'gcn-matrix-deferred end /wrong/')):
+            with self.assertRaises(ValueError):
+                matrix.audit_bounded_workload(broken, client, spec, 8, 0)
+
     def test_truncated_capture_rejected(self):
         with self.assertRaises(ValueError):
             matrix.audit(self.good.split('efb-clear-result')[0], CASES['interior'], 4, 0)

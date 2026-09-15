@@ -774,3 +774,23 @@ Scheduled time is not pure CPU execution: interrupt time may be included.
 Functions that began outside the window remain unknown; do not label them
 from a worker's name or another window's function. Archive this supplementary
 evidence with its client log and analyzer source independently of the matrix.
+
+### Deferred output comparison
+
+`bounded-both-system-profile-deferred` uses the same client/module/profile
+as the live case, but omits the live `dmesg -W` collector and redirects client
+output to a unique remote file until the client exits. The runner then emits
+the saved client output; the matrix separately verifies its device checksum
+and exact streamed suffix before archival. The runner's `--defer-output`
+accepts only the matrix's random `/tmp/gcn-matrix-<32 hex digits>.client` path
+and refuses an existing file.
+
+Kernel diagnostics remain in the ring and are collected after console
+restoration, bracketed by unique begin/end markers. Missing, duplicate or
+misordered markers and incomplete helper records are errors. The kernel's
+16 KiB ring limits this case to eight iterations; no log clearing, kernel
+reboot or buffer expansion is used. Remote files are deleted only after
+checksum verification and successful audit; failures preserve evidence.
+The progress bar advances when deferred client output becomes available.
+Use short matched pairs in both orders to compare capture overhead, not
+these small batches to qualify intermittent-fault reliability.

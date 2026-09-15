@@ -22443,3 +22443,25 @@ Supplementary traces: `wii-gcn-scheduler-20260914-r1` / `-r2` under
 Strict build, 82 tests, default regression, manifests and cleanup pass.
 The owned trace instance and temporary mount were removed. Installed driver
 and production defaults remain unchanged. Full scope is in the investigation.
+
+
+### 2026-09-15: deferred collection lowers median but not timing tails
+
+Added optional deferred client output and post-case kernel-ring collection,
+with unique markers and verified client/kernel hashes. The 16 KiB kernel log
+limits this mode to eight iterations; incomplete capture is an error. No
+log clearing or buffer expansion is used. All rendering, content and pixel
+checks match the live profile.
+
+Four order-alternating pairs passed 32 iterations per mode. Combined median
+elapsed time was 24.718914 ms live versus 22.653589 ms deferred, but observed
+p95/max were 29.419572/29.449053 ms live versus 37.195737/45.648329 ms deferred.
+Small-sample order effects and remaining tails prevent a broad speed claim.
+Collector/output interference contributes to common-case cost but is not a
+complete tail explanation. Next capture workqueue boundaries outside ioctl
+windows to identify long already-running worker functions.
+
+Evidence: `wii-gcn-matrix-deferred-20260915-r1` through `-r4` and separate
+`wii-gcn-deferred-comparison-20260915` under `/media/anolis/dev`. All 83 audit
+tests, default regression, manifests and cleanup pass. Module/client binaries,
+rendering code, installed driver and production defaults unchanged.

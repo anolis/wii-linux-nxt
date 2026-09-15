@@ -2094,3 +2094,68 @@ manifests verify. Final read-only checks confirm tracefs restored to its
 unmounted state, module unloaded, matrix lock released, boot UUID
 `444193a6-aee4-4ae3-a619-4f6dd90fccf1`, printk `7 4 1 7`, and installed
 provider hash `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+
+
+## 2026-09-15: matched live versus deferred capture comparison
+
+Added `bounded-both-system-profile-deferred`, using the unchanged bounded
+module and CPU-profile client. The runner redirects client stdout/stderr to
+a unique remote file and emits it only after the client exits. The matrix
+omits the live dmesg collector, takes a kernel-ring snapshot after console
+restoration, and verifies unique begin/end markers enclosing the whole case.
+It separately verifies the deferred client log against its device SHA256 and
+the streamed client output before removing temporary files. Failed captures
+preserve their evidence. No kernel log is cleared.
+
+The kernel config uses a 16 KiB log ring. Deferred cases are therefore capped
+at eight iterations, with missing markers or incomplete geometry records
+rejected rather than accepted as a partial pass. Both modes keep full source
+patterns, pixel checks, CPU/elapsed timing, kernel diagnostics and the same
+module/client. The simultaneous collector/output change tests combined harness
+interference, not the independent effect of each component.
+
+Four matched pairs use alternating order: live/deferred, deferred/live,
+live/deferred, deferred/live. Each case repeats the same eight-pattern cycle.
+Evidence suites are `wii-gcn-matrix-deferred-20260915-r1` through `-r4` under
+`/media/anolis/dev`. These short batches assess capture cost, not intermittent
+fault qualification. The experimental general helpers remain disabled by
+default; rendering source and binaries are unchanged.
+
+
+### Four matched pairs: lower combined median, tails remain
+
+All eight workload cases passed: 32 live and 32 deferred iterations, 19660800
+pixel checks total. The default regression passed at the end of round four.
+All kernel markers and diagnostic records survived the deferred snapshots;
+all device client/kernel checksums and suite manifests verify.
+
+| Round / order | Live median ms | Deferred median ms |
+|---|---:|---:|
+| 1, live then deferred | 25.033219 | 25.767762 |
+| 2, deferred then live | 24.559490 | 22.649737 |
+| 3, live then deferred | 24.851012 | 24.073284 |
+| 4, deferred then live | 24.718914 | 22.660840 |
+
+Combined 32-call medians: live 24.718914 ms, deferred 22.653589 ms. Means:
+25.235512 versus 25.589581 ms. Observed nearest-rank p95/max: live
+29.419572/29.449053 ms, deferred 37.195737/45.648329 ms. These small samples
+show lower common-case latency with deferred capture, but no tail reduction.
+The advantage also varies with order. Do not interpret the worse sampled
+maximum as proof that deferred mode inherently causes tails, or the lower
+median as a reliability/performance qualification.
+
+Live collection is measurable interference, but removing it does not remove
+all delays. Keep this as a measurement option rather than making it the
+normal long-sweep mode: the 16 KiB ring limits its evidence capacity. Next
+identify long background-worker execution with a bounded trace that includes
+workqueue boundaries outside the ioctl window, preserving the rendering
+path and avoiding guesses about already-running functions.
+
+A separate current-audit comparison archive is at
+`/media/anolis/dev/wii-gcn-deferred-comparison-20260915`, with raw samples,
+per-round figures, source-suite references and analyzer source. Original
+suite results remain immutable. All 83 audit tests, shell syntax and diff
+checks pass. Final module/lock cleanup, boot UUID and printk are unchanged;
+installed provider SHA256
+`a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+No rendering code, client binary or driver default changed this step.

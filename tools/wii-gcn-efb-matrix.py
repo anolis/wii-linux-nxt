@@ -224,6 +224,10 @@ CASES.append(dict(case('bounded-both-system-sched', [], '', 0, 0), bounded=True,
                   bounded_workload='system', bounded_horizontal=True, system_content=True,
                   system_timed=True, system_profile=True, system_sched=True, experimental=True))
 
+CASES.append(dict(case('bounded-both-system-profile-deferred', [], '', 0, 0), bounded=True,
+                  bounded_workload='system', bounded_horizontal=True, system_content=True,
+                  system_timed=True, system_profile=True, deferred=True, experimental=True))
+
 for span in (64, 128):
     CASES.append(dict(case(f'offset-span-{span}', [], '', 0, 0), offset=True, span=span, experimental=True))
 
@@ -301,6 +305,14 @@ def audit_bounded_workload(log, client_log, spec, requested, rc):
     result = (audit_regression(log, client_log, requested, rc) if spec.get('system_baseline')
               else audit_bounded_regression(log, client_log, spec, requested, rc))
     result['case'] = spec['name']
+    if spec.get('deferred'):
+        begins = re.findall(r'gcn-matrix-deferred begin (/tmp/gcn-matrix-[a-f0-9]{32})', log)
+        ends = re.findall(r'gcn-matrix-deferred end (/tmp/gcn-matrix-[a-f0-9]{32})', log)
+        require(len(begins) == 1 and ends == begins, 'missing/wrong deferred capture markers')
+        require(log.index('gcn-matrix-deferred begin') < log.index('gcn-gx: ready fifo=') <
+                log.index('CPU console restored') < log.index('gcn-matrix-deferred end'),
+                'deferred markers do not enclose the case')
+        result['capture_mode'] = 'deferred'
     if spec.get('bounded_horizontal_split'):
         require(log.count('parameter scale_system_split verified Y') == 1,
                 'bounded horizontal split parameter not verified')
@@ -894,6 +906,8 @@ def main():
     lookup = {c['name']: c for c in CASES}
     require(all(n in lookup for n in names), 'unknown case; use --list')
     selected = [lookup[n] for n in names]
+    require(args.iterations <= 8 or not any(c.get('deferred') for c in selected),
+            'deferred capture is limited to eight iterations for the 16 KiB kernel log')
     total = sum(1 if c.get('regression') else args.iterations for c in selected)
     print(f'{len(selected)} cases, up to {total} total iterations/suite runs; frame/geometry ceiling {args.iterations}.')
     if args.dry_run:
@@ -946,8 +960,11 @@ def main():
                             spec['batches'] * batch_log_bytes + 800) // 1024
                 require(state['free_kib'] >= needed, f'not enough /tmp log space: need {needed} KiB, have {state["free_kib"]}')
                 (case_dir / 'before.json').write_text(json.dumps(state, indent=2) + '\n')
-                remote.run(f'nohup dmesg -W > {tag}.log 2>&1 < /dev/null & echo $! > {tag}.pid; sleep 0.2; kill -0 "$(cat {tag}.pid)"')
-                started_capture = True
+                if spec.get('deferred'):
+                    remote.run(f"printf '<6>gcn-matrix-deferred begin {tag}\\n' > /dev/kmsg")
+                else:
+                    remote.run(f'nohup dmesg -W > {tag}.log 2>&1 < /dev/null & echo $! > {tag}.pid; sleep 0.2; kill -0 "$(cat {tag}.pid)"')
+                    started_capture = True
                 flags = ' '.join(f'efb_primitive_{flag}={int(flag in spec["flags"])}' for flag in FLAGS)
                 flags += f' efb_primitive_focus_width={spec.get("focus_width", 8)}'
                 flags += f' efb_primitive_focus_top={spec.get("focus_top", 52)}'
@@ -1020,6 +1037,8 @@ def main():
                     expect = 'Y' if spec.get('identity') or spec.get('regression') or spec.get('bounded') else 'N'
                     command += ['--expect-param', 'scale_system_split=Y' if spec.get('bounded_horizontal_split')
                                 else 'scale_identity_quad=' + expect]
+                if spec.get('deferred'):
+                    command += ['--defer-output', tag + '.client']
                 if args.allow_dirty:
                     command.append('--allow-dirty')
                 # The runner verifies every upload. Upload the tiny checker each case;
@@ -1027,13 +1046,26 @@ def main():
                 (case_dir / 'command.json').write_text(json.dumps(command, indent=2) + '\n')
                 rc = run_client(command, case_dir / 'client.txt', f'{index}/{len(selected)} {spec["name"]}', 1 if spec.get('regression') else args.iterations, args.timeout, spec.get('native', False))
                 result['runner_status'] = rc
-                remote.run(f'pid=$(cat {tag}.pid); test "$(cat /proc/$pid/comm)" = dmesg && kill "$pid"')
-                started_capture = False
+                if spec.get('deferred'):
+                    remote.run(f"printf '<6>gcn-matrix-deferred end {tag}\\n' > /dev/kmsg; dmesg | sed -n '/gcn-matrix-deferred begin {tag.replace('/', chr(92) + '/')}/,$p' > {tag}.log")
+                    client_hash = remote.run(f'sha256sum {tag}.client').decode().split()[0]
+                    client_raw = remote.run(f'cat {tag}.client')
+                    require(sha(client_raw) == client_hash, 'deferred client checksum mismatch')
+                    require((case_dir / 'client.txt').read_bytes().endswith(client_raw), 'deferred client stream mismatch')
+                    (case_dir / 'client-raw.txt').write_bytes(client_raw)
+                    result['client_log_sha256'] = client_hash
+                else:
+                    remote.run(f'pid=$(cat {tag}.pid); test "$(cat /proc/$pid/comm)" = dmesg && kill "$pid"')
+                    started_capture = False
                 expected = remote.run(f'sha256sum {tag}.log').decode().split()[0]
                 compressed = remote.run(f'gzip -c {tag}.log', timeout=180)
                 (case_dir / 'kernel.txt.gz').write_bytes(compressed)
                 raw = gzip.decompress(compressed)
                 require(sha(raw) == expected, 'download checksum mismatch')
+                if spec.get('deferred'):
+                    require(raw.count(f'gcn-matrix-deferred begin {tag}'.encode()) == 1 and
+                            raw.count(f'gcn-matrix-deferred end {tag}'.encode()) == 1,
+                            'deferred kernel capture incomplete/overwritten')
                 (case_dir / 'kernel.txt').write_bytes(raw)
                 after = remote.state()
                 (case_dir / 'after.json').write_text(json.dumps(after, indent=2) + '\n')
@@ -1048,7 +1080,7 @@ def main():
                               if spec.get('native') else audit(raw.decode(), spec, args.iterations, rc))
                 result['kernel_sha256'] = expected
                 # Delete only this suite's random-named temporary files after verified archival.
-                remote.run(f'rm -- {tag}.log {tag}.pid')
+                remote.run(f'rm -- {tag}.log {tag}.client' if spec.get('deferred') else f'rm -- {tag}.log {tag}.pid')
             except (Exception, KeyboardInterrupt) as exc:
                 result['status'] = 'ERROR'
                 result['error'] = str(exc) or 'interrupted'

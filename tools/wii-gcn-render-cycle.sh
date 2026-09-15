@@ -23,6 +23,7 @@ Options:
                        xrgb8888-native[-tiled] (default: rgb565)
   --module-args ARGS   arguments passed to insmod
   --reuse-remote       require checksum-matched files already in /tmp
+  --defer-output PATH  Save remote client output and print it after the test
   --expect-param N=V  Verify a loaded module parameter before testing
   --quiet-kernel      Keep kernel diagnostics in dmesg, suppress tty spam
   --keep-loaded        leave gcn_gx loaded after a successful test
@@ -50,10 +51,15 @@ reuse_remote=0
 keep_loaded=0
 quiet_kernel=0
 expect_param=
+defer_output=
 allow_dirty=0
 
 while (($#)); do
 	case "$1" in
+	--defer-output)
+		defer_output=$2
+		shift
+		;;
 	--expect-param)
 		expect_param=$2
 		shift
@@ -174,6 +180,11 @@ fi
 
 if [[ -n $expect_param && ! $expect_param =~ ^[A-Za-z0-9_]+=[A-Za-z0-9_]+$ ]]; then
 	printf 'Invalid expected parameter: %s\n' "$expect_param" >&2
+	exit 2
+fi
+
+if [[ -n $defer_output && ! $defer_output =~ ^/tmp/gcn-matrix-[a-f0-9]{32}\.client$ ]]; then
+	printf 'Invalid deferred output path: %s\n' "$defer_output" >&2
 	exit 2
 fi
 
@@ -327,7 +338,11 @@ if [[ -n $expect_param ]]; then
 fi
 remote_notice "running hardware test"
 set +e
-remote_exec "$remote_client $client_args"
+if [[ -n $defer_output ]]; then
+	remote_exec "test ! -e $defer_output || exit 2; $remote_client $client_args > $defer_output 2>&1; status=\$?; cat $defer_output; exit \$status"
+else
+	remote_exec "$remote_client $client_args"
+fi
 test_status=$?
 set -e
 
