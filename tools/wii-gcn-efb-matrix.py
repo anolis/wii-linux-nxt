@@ -220,6 +220,10 @@ CASES.append(dict(case('bounded-both-system-profile', [], '', 0, 0), bounded=Tru
                   bounded_workload='system', bounded_horizontal=True, system_content=True,
                   system_timed=True, system_profile=True, experimental=True))
 
+CASES.append(dict(case('bounded-both-system-sched', [], '', 0, 0), bounded=True,
+                  bounded_workload='system', bounded_horizontal=True, system_content=True,
+                  system_timed=True, system_profile=True, system_sched=True, experimental=True))
+
 for span in (64, 128):
     CASES.append(dict(case(f'offset-span-{span}', [], '', 0, 0), offset=True, span=span, experimental=True))
 
@@ -1008,6 +1012,8 @@ def main():
                     command[command.index('--client-args') + 1] = f'--system-content-repeat {args.iterations}'
                 if spec.get('system_profile'):
                     command[command.index('--client-args') + 1] = f'--system-profile-repeat {args.iterations}'
+                if spec.get('system_sched'):
+                    command[command.index('--client-args') + 1] = f'--system-sched-repeat {args.iterations}'
                 if spec.get('bounded_horizontal'):
                     command[-1] += ' scale_bounded_horizontal=1'
                 if spec.get('native') or spec.get('regression') or spec.get('bounded'):

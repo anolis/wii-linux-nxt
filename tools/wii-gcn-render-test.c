@@ -16,6 +16,8 @@
 #include <drm/gcn_drm.h>
 
 static bool system_profile;
+static bool system_sched;
+static int system_trace_on = -1, system_trace_marker = -1;
 
 #define TEST_WIDTH 256U
 #define TEST_HEIGHT 256U
@@ -3902,6 +3904,24 @@ out:
 		fail("close 640-wide scaled-reduction source");
 }
 
+static int system_trace_event(unsigned int iteration, bool begin)
+{
+	char marker[80];
+	int length;
+
+	if (begin && pwrite(system_trace_on, "1", 1, 0) != 1)
+		return -1;
+	length = snprintf(marker, sizeof(marker), "GCN %s iteration=%u\n", begin ? "begin" : "end", iteration);
+	if (write(system_trace_marker, marker, length) != length) {
+		if (pwrite(system_trace_on, "0", 1, 0) != 1)
+			fail("disable scheduler trace");
+		return -1;
+	}
+	if (!begin && pwrite(system_trace_on, "0", 1, 0) != 1)
+		return -1;
+	return 0;
+}
+
 static void test_full_system_layout(int fd, uint32_t layout,
 				    const char *layout_name, int pattern,
 				    unsigned int iteration, bool timed)
@@ -3982,6 +4002,10 @@ static void test_full_system_layout(int fd, uint32_t layout,
 		.dst_width = FULL_DST_WIDTH,
 		.dst_height = FULL_DST_HEIGHT,
 	};
+	if (system_sched && system_trace_event(iteration, true)) {
+		fail("start scheduler trace window");
+		goto out_ctx;
+	}
 	started = monotonic_ns();
 	if (system_profile && (clock_getres(CLOCK_THREAD_CPUTIME_ID, &cpu_resolution) ||
 	    getrusage(RUSAGE_SELF, &usage_start) ||
@@ -4001,6 +4025,10 @@ static void test_full_system_layout(int fd, uint32_t layout,
 			      ((uint64_t)cpu_start.tv_sec * 1000000000ULL + cpu_start.tv_nsec);
 	}
 	elapsed = monotonic_ns() - started;
+	if (system_sched && system_trace_event(iteration, false)) {
+		fail("end scheduler trace window");
+		goto out_ctx;
+	}
 	if (timed)
 		printf("SYSTEM TIMING: iteration=%u ns=%llu status=%d\n", iteration,
 		       (unsigned long long)elapsed, submit_status);
@@ -4323,7 +4351,8 @@ int main(int argc, char **argv)
 			    !strcmp(argv[1], "--wide-reduce-uniform-only");
 	bool reduce_content = argc > 2 && !strcmp(argv[1], "--reduce-content-repeat");
 	bool reduce_repeat = reduce_content || (argc > 2 && !strcmp(argv[1], "--reduce-repeat"));
-	bool profile_repeat = argc > 2 && !strcmp(argv[1], "--system-profile-repeat");
+	bool sched_repeat = argc > 2 && !strcmp(argv[1], "--system-sched-repeat");
+	bool profile_repeat = sched_repeat || (argc > 2 && !strcmp(argv[1], "--system-profile-repeat"));
 	bool system_content = profile_repeat || (argc > 2 && !strcmp(argv[1], "--system-content-repeat"));
 	bool system_repeat = system_content || (argc > 2 && !strcmp(argv[1], "--system-enlarge-repeat"));
 	bool offset_repeat = argc > 2 && !strcmp(argv[1], "--offset-enlarge-repeat");
@@ -4347,6 +4376,7 @@ int main(int argc, char **argv)
 	int fd;
 
 	system_profile = profile_repeat;
+	system_sched = sched_repeat;
 	if (offset_repeat || system_repeat || reduce_repeat) {
 		char *end;
 		unsigned long count = strtoul(argv[2], &end, 10);
@@ -4442,6 +4472,14 @@ int main(int argc, char **argv)
 			goto out_close;
 		}
 		if (system_repeat) {
+			if (system_sched) {
+				system_trace_on = open("/sys/kernel/tracing/instances/wii-gcn-sched/tracing_on", O_WRONLY);
+				system_trace_marker = open("/sys/kernel/tracing/instances/wii-gcn-sched/trace_marker", O_WRONLY);
+				if (system_trace_on < 0 || system_trace_marker < 0) {
+					fail("open isolated scheduler trace");
+					goto out_close;
+				}
+			}
 			if ((features & DRM_GCN_FEATURE_BLIT_SCALED_SYSTEM_RGB565) &&
 			    (features & DRM_GCN_FEATURE_SYSTEM_GEM_LINEAR)) {
 				for (unsigned int i = 0; i < repeat_iterations && !failures; i++) {
@@ -4594,6 +4632,13 @@ int main(int argc, char **argv)
 	}
 
 out_close:
+	if (system_trace_on >= 0) {
+		if (pwrite(system_trace_on, "0", 1, 0) != 1)
+			fail("disable scheduler trace");
+		close(system_trace_on);
+	}
+	if (system_trace_marker >= 0)
+		close(system_trace_marker);
 	close(other_fd);
 	close(fd);
 	if (failures) {

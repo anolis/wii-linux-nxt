@@ -2020,3 +2020,77 @@ manifests verify. Final cleanup confirms unchanged boot UUID/printk, module
 unloaded, matrix lock released and installed-provider SHA256
 `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
 No driver source, module binary, or production-default change was made.
+
+
+## 2026-09-14: bounded scheduler capture identifies competing work
+
+Mounted previously unmounted tracefs and created a dedicated
+`wii-gcn-sched` instance, initially stopped, with a 1024 KiB buffer and mono
+clock. Added `--system-sched-repeat` and the matching matrix case. The client
+enables the isolated trace only around each profiled ioctl, with ordered
+begin/end markers, and disables it before verification and again at exit.
+Rendering commands and the module are unchanged. The client retains the
+CPU profile, eight source patterns and complete destination checks.
+
+Two 64-iteration cases passed (19660800 destination pixels each):
+`wii-gcn-matrix-system-sched-20260914-r1` and `-r2`. Supplementary scheduler
+evidence is in `/media/anolis/dev/wii-gcn-scheduler-20260914-r1` and `-r2`,
+including client log, device checksum/counters, raw trace, audited result,
+analyzer source and manifest. The second trace adds workqueue execute events.
+Both device hashes verify; all overrun/commit-overrun/drop counters are zero.
+There are 891 and 1257 trace entries respectively, with all 64 windows intact.
+The second download was slow; incomplete-transfer hashes were rejected before
+the completed download matched its device hash. No partial trace was accepted.
+
+The separate scheduler audit verifies trace and client iteration alignment,
+single-CPU task continuity and conservation of scheduled time. It attributes
+intervals to PIDs and retains workqueue function records. This is scheduled
+time, potentially including interrupt time, not a pure task CPU profiler.
+A worker function that began outside the window is not inferred from a
+nearby window. The matrix's own PASS covers pixel/CPU checks; scheduler
+integrity is checked by the supplementary audit.
+
+| Capture | Other scheduled time, total across 64 windows | Largest competing tasks |
+|---|---:|---|
+| Scheduler only | 282.279 ms | kworker/0:1 99.983 ms; dmesg 83.060 ms; kworker/0:0 79.684 ms |
+| Scheduler + workqueue | 363.324 ms | kworker/0:0 116.058 ms; kworker/0:1 115.437 ms; dmesg 82.200 ms; kworker/u4:0 31.182 ms |
+
+The dmesg task is the matrix's live diagnostic collector: approximately
+1.3 ms of scheduled time per scaling window in both captures. Other observed
+competitors include wiidesk and wireless-related work. Workqueue start records
+identify 64 `sdio_irq_work` executions across the two main workers, plus
+`cfg80211_wiphy_work`, `b43_tx_work`, cursor flashing, framebuffer damage work
+and one neighbour-management work item. Counts identify observed functions;
+they do not assign every worker interval to that function.
+
+In the workqueue capture's slowest call (zero-based iteration 63), elapsed
+ioctl time was 49.240165 ms and other tasks occupied 27.554 ms of the enclosing
+window. Worker PID 10121 alone occupied 25.955 ms, repeatedly interleaving
+with the client at equal normal priority. Its work function was already
+running when this window opened, so that specific function is unknown.
+Another slow call, iteration 59, had 37.267737 ms elapsed and 15.703 ms other
+scheduled time, including 14.066 ms on worker PID 11128.
+
+This identifies system/measurement contention as a concrete contributor to
+latency. It does not prove that Wi-Fi explains every tail or that the prior
+127 ms sample had the same cause. The next useful comparison is reducing
+live SSH/logging interference while retaining checksum-verified diagnostics
+and full client checks. Do not disable networking, reprioritize system tasks,
+or change GPU geometry merely to hide this measurement effect. If the long
+worker still needs attribution, capture its work boundary outside the ioctl
+window with an explicitly bounded buffer rather than guessing its function.
+
+The client strict build passes after correcting checked trace-disable writes;
+SHA256 `29dda510a20830e76c47dcf8829be0e8c9e63e342dc9aa83f965cfa24396e59d`.
+All 82 audit tests pass, including real scheduler/workqueue captures, loss,
+missing windows and broken task continuity. The isolated trace instance was
+removed and the initially absent tracefs mount unmounted. Boot/printk and
+installed provider remain unchanged; no driver source or default change.
+
+
+The default regression with the scheduler-capable client passed in
+`wii-gcn-matrix-system-sched-default-20260914`. All matrix and supplementary
+manifests verify. Final read-only checks confirm tracefs restored to its
+unmounted state, module unloaded, matrix lock released, boot UUID
+`444193a6-aee4-4ae3-a619-4f6dd90fccf1`, printk `7 4 1 7`, and installed
+provider hash `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.

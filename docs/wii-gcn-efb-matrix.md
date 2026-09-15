@@ -743,3 +743,34 @@ negative differences are preserved rather than clamped or called waits.
 Context switches can indicate blocking/preemption but do not identify the
 specific wait or competing task. This profile changes measurement overhead
 and does not add kernel instrumentation or alter rendering commands.
+
+### Isolated scheduler captures
+
+`bounded-both-system-sched` selects `--system-sched-repeat N`. It requires
+a separately prepared tracefs instance at
+`/sys/kernel/tracing/instances/wii-gcn-sched`, initially stopped, with a
+bounded buffer (the validated captures used 1024 KiB), `mono` clock and
+`sched/sched_switch` enabled. Optional workqueue execute-start/end events
+identify functions when their records fall inside a captured window.
+Use a short run such as 64 iterations. Refuse an existing instance rather
+than reusing another tracing session. If tracefs was not mounted, remember
+to restore that state after removing this instance.
+
+The client enables tracing and emits `GCN begin iteration=N` before each
+profiled call, then emits the matching end marker and disables tracing
+before client verification. Exit cleanup also attempts to disable tracing.
+After the case, verify tracing is off, download `trace`, CPU0 `stats` and
+the device's trace SHA256, and remove only the instance created for the test.
+The regular matrix result validates pixels/CPU records; it does not validate
+the separately collected scheduler trace.
+
+`tools/wii-gcn-scheduler-audit.py --trace TRACE --stats REMOTE_STATE
+--client CLIENT_LOG --output NEW_RESULT` separately checks the device hash,
+zero loss/overrun counters, entry counts, single-CPU records, ordered complete
+windows and task-switch continuity. REMOTE_STATE contains the CPU0 stats
+followed by `sha256sum` of the instance's trace file. The output attributes
+scheduled intervals within each window to PIDs and retains workqueue records.
+Scheduled time is not pure CPU execution: interrupt time may be included.
+Functions that began outside the window remain unknown; do not label them
+from a worker's name or another window's function. Archive this supplementary
+evidence with its client log and analyzer source independently of the matrix.

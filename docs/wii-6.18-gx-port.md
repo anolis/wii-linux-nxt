@@ -22417,3 +22417,29 @@ Evidence: `wii-gcn-matrix-system-profile-20260914-screen` and `-long` under
 Strict build, 78 audit tests, manifests and cleanup checks pass. Installed
 driver, driver source and defaults unchanged. See the investigation report
 for complete timing/counter scope.
+
+
+### 2026-09-14: scheduler capture identifies kernel and collector interference
+
+Two 64-iteration scheduler captures passed complete pixel checks using the
+unchanged bounded module. A dedicated 1 MiB trace instance captured only
+profiled-call windows; device hashes, zero-loss counters and complete task
+continuity verified all 891/1257 entries. The separate scheduler audit and
+real fixtures cover missing windows, dropped events and broken task chains.
+
+The main competing tasks were two kernel workers and the test's dmesg
+collector (about 1.3 ms scheduled per call). Workqueue records identify SDIO
+interrupt work, Wi-Fi work and some console/framebuffer work. The second
+capture's slowest 49.24 ms call included 25.96 ms scheduled on one worker,
+but its function began outside the window and remains unknown. Do not
+attribute that specific call to Wi-Fi solely from another window's function.
+This points to system/measurement contention as a real contributor; next
+compare reduced live logging/SSH interference without changing GPU geometry.
+
+Matrix evidence: `wii-gcn-matrix-system-sched-20260914-r1` / `-r2`.
+Supplementary traces: `wii-gcn-scheduler-20260914-r1` / `-r2` under
+`/media/anolis/dev`. Scheduler-capable client SHA256
+`29dda510a20830e76c47dcf8829be0e8c9e63e342dc9aa83f965cfa24396e59d`.
+Strict build, 82 tests, default regression, manifests and cleanup pass.
+The owned trace instance and temporary mount were removed. Installed driver
+and production defaults remain unchanged. Full scope is in the investigation.
