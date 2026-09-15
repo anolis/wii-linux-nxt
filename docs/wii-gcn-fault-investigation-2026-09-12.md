@@ -1878,3 +1878,77 @@ module unloaded, matrix lock released, and unchanged installed provider
 `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
 The compressed audit fixtures are explicitly tracked for reproducibility
 from a clean checkout. General horizontal/final options remain off by default.
+
+
+## 2026-09-14: varied enlargement content and scaling-call timing
+
+Added `--system-content-repeat N` to the render client. It cycles eight
+RGB565 source patterns: black, white, red, green, blue, one-pixel source
+checkerboard, walking bit, and deterministic noise. It reuses the existing
+reduction generator at coordinates (2*x,2*y), so the checker and walking
+patterns have one-pixel spacing in the 320x240 source. Their phase advances
+per cycle; the noise seed is `(iteration+1)*0x9e3779b9` modulo 2^32. The
+client still independently maps every destination coordinate to its nearest
+source coordinate and checks all 307200 output pixels plus MEM1 cleanup.
+
+System repeat modes now log elapsed monotonic nanoseconds around the scaling
+ioctl, including CPU staging and driver completion. Source generation,
+object allocation and client verification are outside the timing interval.
+The audit validates ordered records and keeps clean-call samples, mean,
+median, nearest-rank p95 and maximum. Failed last attempts are excluded.
+Diagnostic command logging remains enabled; this is not a display frame-rate
+measurement or a production benchmark.
+
+New cases: `system-baseline-timed` (default driver settings),
+`bounded-both-system-timed` (same ramp with both general helpers), and
+`bounded-both-system-content` (both helpers with eight-pattern source).
+All use the unchanged module SHA256
+`50bfa40e6127c21c8774f4bd337cfdefe2413495b28cdaf48d0324b376524f32`.
+The new render client is archived under
+`/media/anolis/dev/wii-gcn-system-content-clients/wii-gcn-render-test`, SHA256
+`7d4d8523bb40ed367275660d0388dbe58e2c2a5bb19472607fdf5f26dec25438`.
+Its strict build passes; no driver source or module change is involved.
+
+`wii-gcn-matrix-system-content-20260914-screen` passed all three 16-iteration
+cases. The initial ramp medians are 23.326131 ms default and 26.661514 ms
+bounded; their means are 23.133819 and 27.738012 ms. These small samples need
+an order-reversed comparison before interpreting the timing difference.
+Real screen fixtures verify timing/content schedules, and explicitly
+synthetic client outcomes test exclusion of a failed last timing sample.
+
+
+### Content sweep passes; added cost and timing tails measured
+
+`wii-gcn-matrix-system-content-20260914-long` passed 1000 content iterations,
+125 cycles of all eight patterns, and 307200000 destination pixel checks.
+The default full render regression with the new client also passed. No raw
+EFB readback was enabled. Clean ioctl timing: median 26.830716 ms, p95
+35.464922 ms, maximum 127.414699 ms. The slowest call was zero-based iteration
+48, solid black; iteration 49 took 60.578 ms. The capture does not establish
+whether the tail comes from scheduling, CPU work, command completion or
+instrumentation. Do not attribute it to source complexity from these data.
+
+`wii-gcn-matrix-system-timing-20260914-reverse` ran bounded then default,
+16 clean ramp iterations each, reversing the screen's order. All passed:
+
+| Order | Default median / mean ms | Bounded median / mean ms |
+|---|---|---|
+| Default then bounded | 23.326131 / 23.133819 | 26.661514 / 27.738012 |
+| Bounded then default | 20.974831 / 22.571159 | 25.915958 / 26.366202 |
+| Combined, 32 clean samples each | 22.835926 / 22.852490 | 26.280337 / 27.052107 |
+
+The combined median difference is 3.444411 ms, approximately 15%. This is a
+small instrumented scaling-call comparison, with diagnostic logging active,
+not a stable performance distribution or display frame rate. The known
+unreliable default control passing 32 calls does not overturn earlier fault
+captures. The content sweep's timing tails remain material; before a default
+policy decision, separate CPU-active time from elapsed/wait time and locate
+which stage contributes slow calls. Avoid changing geometry merely to improve
+an aggregate timing statistic.
+
+All 77 audit tests pass, including exact content/timing schedules and failed
+sample exclusion. Strict client build and diff checks pass. All three suite
+manifests verify. Cleanup confirms unchanged boot UUID, printk `7 4 1 7`,
+module unloaded, matrix lock released, and installed-provider SHA256
+`a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+Driver source, module binary and production defaults are unchanged this step.

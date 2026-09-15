@@ -837,6 +837,38 @@ class AuditTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 matrix.audit_bounded_regression(broken, client, spec, 1, 0)
 
+    def test_system_timing_requires_all_attempts_and_summarizes_clean_calls(self):
+        for name in ('system-baseline-timed', 'bounded-both-system-timed'):
+            log = gzip.decompress((FIXTURES / f'{name}.txt.gz').read_bytes()).decode()
+            client = gzip.decompress((FIXTURES / f'{name}-client.txt.gz').read_bytes()).decode()
+            result = matrix.audit_bounded_workload(log, client, CASES[name], 16, 0)
+            self.assertEqual(result['ioctl_timed_clean_calls'], 16)
+            self.assertEqual(result['ioctl_p95_ns'], max(result['ioctl_samples_ns']))
+            for broken in (client.replace('SYSTEM TIMING: iteration=15', 'missing'),
+                           client.replace('SYSTEM TIMING: iteration=0', 'SYSTEM TIMING: iteration=1'),
+                           client.replace('status=0', 'status=-1')):
+                with self.assertRaises(ValueError):
+                    matrix.audit_bounded_workload(log, broken, CASES[name], 16, 0)
+            # Synthetic final client mismatch: completed timings exclude attempt 16.
+            failed = client.replace('SYSTEM: 16/16 iterations', '').replace(
+                'PASS: GCN render UAPI', '1 render UAPI test(s) failed')
+            result = matrix.audit_bounded_workload(log, failed, CASES[name], 16, 1)
+            self.assertEqual((result['completed'], result['checked'], result['ioctl_timed_clean_calls']), (15,16,15))
+
+    def test_system_content_requires_every_pattern_and_seed(self):
+        name = 'bounded-both-system-content'
+        log = gzip.decompress((FIXTURES / f'{name}.txt.gz').read_bytes()).decode()
+        client = gzip.decompress((FIXTURES / f'{name}-client.txt.gz').read_bytes()).decode()
+        result = matrix.audit_bounded_workload(log, client, CASES[name], 16, 0)
+        self.assertEqual(result['client_pixels_checked'], 16 * 307200)
+        for broken in (client.replace('iteration=7 pattern=7', 'iteration=7 pattern=6'),
+                       client.replace('seed=2654435769', 'seed=0'),
+                       client.replace('SYSTEM CONTENT: iteration=15', 'missing')):
+            with self.assertRaises(ValueError):
+                matrix.audit_bounded_workload(log, broken, CASES[name], 16, 0)
+        with self.assertRaises(ValueError):
+            matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-timed'], 16, 0)
+
     def test_truncated_capture_rejected(self):
         with self.assertRaises(ValueError):
             matrix.audit(self.good.split('efb-clear-result')[0], CASES['interior'], 4, 0)

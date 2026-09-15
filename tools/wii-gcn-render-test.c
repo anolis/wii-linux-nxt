@@ -3900,7 +3900,8 @@ out:
 }
 
 static void test_full_system_layout(int fd, uint32_t layout,
-				    const char *layout_name)
+				    const char *layout_name, int pattern,
+				    unsigned int iteration, bool timed)
 {
 	struct drm_gcn_ctx_create ctx = {};
 	struct drm_gcn_ctx_free free_ctx;
@@ -3912,6 +3913,8 @@ static void test_full_system_layout(int fd, uint32_t layout,
 	uint64_t free_before = 0;
 	uint64_t free_during = 0;
 	uint64_t free_after = 0;
+	uint64_t started, elapsed;
+	int submit_status, submit_errno;
 
 	if (get_param(fd, DRM_GCN_PARAM_MEM1_FREE_BYTES, &free_before)) {
 		fail("query MEM1 before full-screen system scale");
@@ -3948,7 +3951,8 @@ static void test_full_system_layout(int fd, uint32_t layout,
 			size_t pixel = rgb565_index(x, y, FULL_SRC_WIDTH,
 						   layout);
 
-			src_map[pixel] = y * FULL_SRC_WIDTH + x;
+			src_map[pixel] = pattern < 0 ? y * FULL_SRC_WIDTH + x :
+				reduction_content(x * 2, y * 2, pattern, iteration);
 		}
 	}
 	for (unsigned int y = 0; y < FULL_DST_HEIGHT; y++) {
@@ -3973,7 +3977,15 @@ static void test_full_system_layout(int fd, uint32_t layout,
 		.dst_width = FULL_DST_WIDTH,
 		.dst_height = FULL_DST_HEIGHT,
 	};
-	if (ioctl(fd, DRM_IOCTL_GCN_BLIT_SCALED, &blit)) {
+	started = monotonic_ns();
+	submit_status = ioctl(fd, DRM_IOCTL_GCN_BLIT_SCALED, &blit);
+	submit_errno = errno;
+	elapsed = monotonic_ns() - started;
+	if (timed)
+		printf("SYSTEM TIMING: iteration=%u ns=%llu status=%d\n", iteration,
+		       (unsigned long long)elapsed, submit_status);
+	if (submit_status) {
+		errno = submit_errno;
 		fail("submit 320x240 to 640x480 system scaled blit");
 		goto out_ctx;
 	}
@@ -3984,7 +3996,8 @@ static void test_full_system_layout(int fd, uint32_t layout,
 					FULL_SRC_WIDTH, FULL_DST_WIDTH);
 			unsigned int source_y = scaled_source_offset(y,
 					FULL_SRC_HEIGHT, FULL_DST_HEIGHT);
-			uint16_t expected = source_y * FULL_SRC_WIDTH + source_x;
+			uint16_t expected = pattern < 0 ? source_y * FULL_SRC_WIDTH + source_x :
+				reduction_content(source_x * 2, source_y * 2, pattern, iteration);
 			size_t pixel = rgb565_index(x, y, FULL_DST_WIDTH,
 						   layout);
 
@@ -4027,8 +4040,8 @@ out:
 
 static void test_full_scaled_system_blit(int fd)
 {
-	test_full_system_layout(fd, DRM_GCN_GEM_LAYOUT_TILED_4X4, "tiled");
-	test_full_system_layout(fd, DRM_GCN_GEM_LAYOUT_LINEAR, "linear");
+	test_full_system_layout(fd, DRM_GCN_GEM_LAYOUT_TILED_4X4, "tiled", -1, 0, false);
+	test_full_system_layout(fd, DRM_GCN_GEM_LAYOUT_LINEAR, "linear", -1, 0, false);
 }
 
 static void test_full_xrgb8888_to_rgb565_system_blit(int fd)
@@ -4284,7 +4297,8 @@ int main(int argc, char **argv)
 			    !strcmp(argv[1], "--wide-reduce-uniform-only");
 	bool reduce_content = argc > 2 && !strcmp(argv[1], "--reduce-content-repeat");
 	bool reduce_repeat = reduce_content || (argc > 2 && !strcmp(argv[1], "--reduce-repeat"));
-	bool system_repeat = argc > 2 && !strcmp(argv[1], "--system-enlarge-repeat");
+	bool system_content = argc > 2 && !strcmp(argv[1], "--system-content-repeat");
+	bool system_repeat = system_content || (argc > 2 && !strcmp(argv[1], "--system-enlarge-repeat"));
 	bool offset_repeat = argc > 2 && !strcmp(argv[1], "--offset-enlarge-repeat");
 	unsigned int repeat_iterations = 1;
 	bool offset_only = argc > 1 && !strcmp(argv[1], "--offset-enlarge-only");
@@ -4403,7 +4417,11 @@ int main(int argc, char **argv)
 			if ((features & DRM_GCN_FEATURE_BLIT_SCALED_SYSTEM_RGB565) &&
 			    (features & DRM_GCN_FEATURE_SYSTEM_GEM_LINEAR)) {
 				for (unsigned int i = 0; i < repeat_iterations && !failures; i++) {
-					test_full_system_layout(fd, DRM_GCN_GEM_LAYOUT_LINEAR, "linear");
+					if (system_content)
+						printf("SYSTEM CONTENT: iteration=%u pattern=%u seed=%u\n",
+						       i, i % 8, (i + 1U) * 0x9e3779b9U);
+					test_full_system_layout(fd, DRM_GCN_GEM_LAYOUT_LINEAR, "linear",
+								system_content ? (int)(i % 8) : -1, i, true);
 					if (!failures)
 						printf("SYSTEM: %u/%u iterations\n", i + 1, repeat_iterations);
 				}

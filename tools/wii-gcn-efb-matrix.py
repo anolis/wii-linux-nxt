@@ -209,6 +209,13 @@ for workload in ('offset', 'system', 'reduce-content'):
     CASES.append(dict(case(f'bounded-both-{workload}', [], '', 0, 0), bounded=True,
                       bounded_horizontal=True, bounded_workload=workload, experimental=True))
 
+for name, baseline, content in [('system-baseline-timed', True, False),
+                                ('bounded-both-system-timed', False, False),
+                                ('bounded-both-system-content', False, True)]:
+    CASES.append(dict(case(name, [], '', 0, 0), bounded=True, bounded_workload='system',
+                      bounded_horizontal=not baseline, system_baseline=baseline,
+                      system_content=content, system_timed=True, experimental=True))
+
 for span in (64, 128):
     CASES.append(dict(case(f'offset-span-{span}', [], '', 0, 0), offset=True, span=span, experimental=True))
 
@@ -283,7 +290,9 @@ def audit_bounded_regression(log, client_log, spec, requested, rc):
     return result
 
 def audit_bounded_workload(log, client_log, spec, requested, rc):
-    result = audit_bounded_regression(log, client_log, spec, requested, rc)
+    result = (audit_regression(log, client_log, requested, rc) if spec.get('system_baseline')
+              else audit_bounded_regression(log, client_log, spec, requested, rc))
+    result['case'] = spec['name']
     if spec.get('bounded_horizontal_split'):
         require(log.count('parameter scale_system_split verified Y') == 1,
                 'bounded horizontal split parameter not verified')
@@ -300,9 +309,11 @@ def audit_bounded_workload(log, client_log, spec, requested, rc):
                 'wrong horizontal workload geometry')
     progress = re.findall(rf'{prefix}: (\d+)/(\d+) iterations', client_log)
     completed = len(progress)
-    checked = result['bounded_calls']
+    timings = re.findall(r'SYSTEM TIMING: iteration=(\d+) ns=(\d+) status=(-?\d+)', client_log)
+    checked = len(timings) if spec.get('system_baseline') else result['bounded_calls']
     require(progress == [(str(i + 1), str(requested)) for i in range(completed)], 'wrong bounded workload progress')
-    require(result['bounded_geometries'] == [geometry] * checked, 'wrong bounded workload geometry')
+    if not spec.get('system_baseline'):
+        require(result['bounded_geometries'] == [geometry] * checked, 'wrong bounded workload geometry')
     require((rc == 0 and completed == checked == requested) or
             (rc == 1 and completed < requested and checked == completed + 1), 'incomplete bounded workload')
     content = re.findall(r'REDUCE CONTENT: iteration=(\d+) pattern=(\d+) seed=(\d+)', client_log)
@@ -311,6 +322,20 @@ def audit_bounded_workload(log, client_log, spec, requested, rc):
     require(content == expected_content, 'wrong bounded workload content schedule')
     result.update(requested=requested, completed=completed, checked=checked,
                   client_pixels_checked=completed * pixels)
+    system_content = re.findall(r'SYSTEM CONTENT: iteration=(\d+) pattern=(\d+) seed=(\d+)', client_log)
+    require(system_content == ([(str(i), str(i % 8), str(((i+1)*0x9e3779b9)&0xffffffff)) for i in range(checked)]
+                               if spec.get('system_content') else []), 'wrong system content schedule')
+    if timings or spec.get('system_timed'):
+        require(len(timings) == checked and all(row[0] == str(i) and int(row[1]) > 0
+                and (row[2] == '0' or (i >= completed and rc == 1))
+                and row[2] in ('0', '-1') for i, row in enumerate(timings)), 'wrong system timing records')
+        samples = [int(row[1]) for row in timings[:completed]]
+        ordered = sorted(samples)
+        result.update(ioctl_samples_ns=samples, ioctl_timed_clean_calls=len(samples),
+                      ioctl_mean_ns=sum(samples)//len(samples) if samples else None,
+                      ioctl_median_ns=(ordered[(len(ordered)-1)//2]+ordered[len(ordered)//2])//2 if samples else None,
+                      ioctl_p95_ns=ordered[(95*len(ordered)+99)//100-1] if samples else None,
+                      ioctl_max_ns=max(samples) if samples else None)
     if rc:
         result['first_record'] = next((line for line in client_log.splitlines() if line.startswith('FAIL:')), '')
         pixel = re.search(r'mismatch at \((\d+),(\d+)\)', result['first_record'])
@@ -961,6 +986,10 @@ def main():
                         command[-1] += ' scale_system_trace=1'
                     if spec.get('bounded_horizontal_split'):
                         command[-1] += ' scale_system_split=1'
+                if spec.get('system_baseline'):
+                    command[-1] = ''
+                if spec.get('system_content'):
+                    command[command.index('--client-args') + 1] = f'--system-content-repeat {args.iterations}'
                 if spec.get('bounded_horizontal'):
                     command[-1] += ' scale_bounded_horizontal=1'
                 if spec.get('native') or spec.get('regression') or spec.get('bounded'):

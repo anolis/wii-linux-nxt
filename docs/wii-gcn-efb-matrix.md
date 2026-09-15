@@ -704,3 +704,27 @@ All render regression audits require an active provider. The client's
 intentional provider-absent test can print PASS, which is insufficient for
 these hardware suites. The failed first general-helper configuration is
 retained as a fixture to ensure this situation is rejected.
+
+### Enlargement content and ioctl timing
+
+`bounded-both-system-content` uses `--system-content-repeat N` to cycle
+black, white, red, green, blue, one-pixel source checkerboard, walking RGB565
+bits, and deterministic noise. Checker phase and walking-bit position advance
+each cycle. The existing reduction generator is evaluated at `(2*x,2*y)`;
+this produces one-pixel patterns in the 320x240 source. Every attempted call
+logs its iteration, pattern index and seed; the audit requires the exact
+schedule, both helpers' geometry and every destination pixel check.
+
+The client also records monotonic-clock duration around each system scaling
+ioctl, including CPU staging and driver command/completion work but excluding
+object allocation, source generation and client verification. The audit keeps
+raw timing samples and mean, median, nearest-rank p95 and maximum for clean
+iterations only. The failed attempt, if any, is excluded from these summaries.
+Kernel diagnostic logging remains active; these measurements are not display
+frame rates or a production benchmark.
+
+`system-baseline-timed` uses the driver's default path; `bounded-both-system-timed`
+uses both helpers with the original ramp source. They require the new timing
+client and exact per-attempt timing records. A short order-reversed comparison
+can assess cost without an unnecessary long run of a known unreliable control.
+Never use timings from censored failures to claim a stable speed/reliability tradeoff.

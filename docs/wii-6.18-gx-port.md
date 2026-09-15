@@ -22370,3 +22370,27 @@ now also covered by the strengthened active-provider audit. All 75 tests,
 W=1/strict-client builds, manifests and cleanup checks pass. Installed driver
 unchanged. Broader enlargement content and performance checks remain before
 considering a production default. See the fault-investigation report.
+
+
+### 2026-09-14: enlargement content sweep and ioctl timing
+
+The unchanged opt-in bounded module passed 1000 enlargement iterations
+cycling eight source patterns, including one-pixel checkerboard, walking
+bits and deterministic noise: 307200000 destination pixel checks. The default
+regression also passed. The new system-repeat client records elapsed ioctl
+time, excluding allocation, pattern generation and pixel verification.
+
+Two short opposite-order ramp comparisons passed 32 calls per path. Combined
+medians: default 22.835926 ms, bounded 26.280337 ms, about 3.44 ms / 15% extra
+under current instrumentation. The 1000-call content sweep had a 26.830716 ms
+median, 35.464922 ms p95 and 127.414699 ms maximum. These are not frame-rate
+measurements; timing tails need CPU-active versus elapsed/stage investigation
+before default policy decisions. General helpers remain experimental.
+
+Evidence: `wii-gcn-matrix-system-content-20260914-screen`, `-long`, and
+`wii-gcn-matrix-system-timing-20260914-reverse` under `/media/anolis/dev`.
+New render client SHA256
+`7d4d8523bb40ed367275660d0388dbe58e2c2a5bb19472607fdf5f26dec25438`.
+Strict build, 77 audit tests, manifests and cleanup checks pass. Installed
+provider, driver source and defaults unchanged. Full details are in the
+fault-investigation report.
