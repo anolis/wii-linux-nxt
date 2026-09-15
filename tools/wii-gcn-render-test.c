@@ -589,6 +589,7 @@ static void test_submit(int fd, int other_fd)
 		{ "near-identity enlargement", 31, 29, 126, 130, 79, 83, 127, 131, false },
 		{ "full-width reduction", 0, 47, 256, 73, 0, 101, 255, 73, false },
 		{ "full-width enlargement", 0, 43, 255, 79, 0, 97, 256, 79, false },
+		{ "tall odd mixed-axis scale", 1, 1, 255, 255, 0, 61, 256, 127, false },
 		{ "horizontal one-pixel replication", 173, 71, 1, 83, 0, 151, 256, 83, false },
 		{ "vertical one-pixel replication", 67, 211, 97, 1, 151, 0, 97, 256, false },
 		{ "extreme horizontal reduction", 0, 53, 255, 71, 101, 113, 2, 71, false },
@@ -3694,7 +3695,7 @@ out:
 		fail("close 640-wide scaled-blit source");
 }
 
-static void test_offset_enlarge(int fd)
+static void test_offset_enlarge(int fd, unsigned int iterations)
 {
 	const struct scaled_blit_case test = {
 		"full-width enlargement", 0, 43, 255, 79, 0, 97, 256, 79, false,
@@ -3729,7 +3730,7 @@ static void test_offset_enlarge(int fd)
 		fail("create offset-enlargement context or syncobj");
 		goto out;
 	}
-	for (unsigned int frame = 0; frame < 2000 && !failures; frame++) {
+	for (unsigned int frame = 0; frame < iterations && !failures; frame++) {
 		printf("OFFSET ENLARGE: frame=%u\n", frame);
 		if (test_scaled_blit_case(fd, ctx.id, sync.handle, src.handle,
 					  dst.handle, src_map, dst_map, &test))
@@ -3744,6 +3745,7 @@ static void test_offset_enlarge(int fd)
 				}
 			}
 		}
+		printf("OFFSET: %u/%u iterations\n", frame + 1, iterations);
 	}
 out:
 	if (sync.handle) {
@@ -3774,7 +3776,32 @@ out:
 		       (unsigned long long)free_after);
 }
 
-static void test_wide_scaled_reduce(int fd, bool uniform)
+static uint16_t reduction_content(unsigned int x, unsigned int y,
+				  int pattern, unsigned int iteration)
+{
+	uint32_t value;
+
+	switch (pattern) {
+	case -2: return 0x9f1d;
+	case -1: return y * WIDE_REDUCE_SRC_WIDTH + x;
+	case 0: return 0;
+	case 1: return 0xffff;
+	case 2: return 0xf800;
+	case 3: return 0x07e0;
+	case 4: return 0x001f;
+	case 5: return ((x / 2 + y / 2 + iteration / 8) & 1) ? 0xffff : 0;
+	case 6: return 1U << ((x / 2 + y / 2 + iteration / 8) & 15);
+	default:
+		value = (iteration + 1) * 0x9e3779b9U ^ (y * 640 + x);
+		value ^= value >> 16;
+		value *= 0x7feb352dU;
+		value ^= value >> 15;
+		value *= 0x846ca68bU;
+		return (value ^ (value >> 16)) & 0xffff;
+	}
+}
+
+static void test_wide_scaled_reduce(int fd, int pattern, unsigned int iteration)
 {
 	struct drm_gcn_ctx_create ctx = {};
 	struct drm_gcn_ctx_free free_ctx;
@@ -3803,8 +3830,7 @@ static void test_wide_scaled_reduce(int fd, bool uniform)
 			size_t pixel = tiled_rgb565_index(x, y,
 						 WIDE_REDUCE_SRC_WIDTH);
 
-			src_map[pixel] = uniform ? 0x9f1d :
-					 y * WIDE_REDUCE_SRC_WIDTH + x;
+			src_map[pixel] = reduction_content(x, y, pattern, iteration);
 		}
 	}
 	for (unsigned int y = 0; y < WIDE_REDUCE_DST_HEIGHT; y++) {
@@ -3842,8 +3868,7 @@ static void test_wide_scaled_reduce(int fd, bool uniform)
 			unsigned int source_y = scaled_source_offset(y,
 					WIDE_REDUCE_SRC_HEIGHT,
 					WIDE_REDUCE_DST_HEIGHT);
-			uint16_t expected = uniform ? 0x9f1d :
-					    source_y * WIDE_REDUCE_SRC_WIDTH + source_x;
+			uint16_t expected = reduction_content(source_x, source_y, pattern, iteration);
 			size_t pixel = tiled_rgb565_index(x, y,
 						 WIDE_REDUCE_DST_WIDTH);
 
@@ -4257,9 +4282,14 @@ int main(int argc, char **argv)
 				!strcmp(argv[1], "--wide-reduce-only");
 	bool uniform_only = argc > 1 &&
 			    !strcmp(argv[1], "--wide-reduce-uniform-only");
+	bool reduce_content = argc > 2 && !strcmp(argv[1], "--reduce-content-repeat");
+	bool reduce_repeat = reduce_content || (argc > 2 && !strcmp(argv[1], "--reduce-repeat"));
+	bool system_repeat = argc > 2 && !strcmp(argv[1], "--system-enlarge-repeat");
+	bool offset_repeat = argc > 2 && !strcmp(argv[1], "--offset-enlarge-repeat");
+	unsigned int repeat_iterations = 1;
 	bool offset_only = argc > 1 && !strcmp(argv[1], "--offset-enlarge-only");
 	int mode_args = hold + linear_only + wide_reduce_only + uniform_only +
-			offset_only;
+			offset_only + 2 * offset_repeat + 2 * system_repeat + 2 * reduce_repeat;
 	const char *node = argc > 1 + mode_args ? argv[1 + mode_args] :
 			   "/dev/dri/renderD128";
 	uint64_t provider = 0;
@@ -4275,6 +4305,14 @@ int main(int argc, char **argv)
 	int other_fd;
 	int fd;
 
+	if (offset_repeat || system_repeat || reduce_repeat) {
+		char *end;
+		unsigned long count = strtoul(argv[2], &end, 10);
+
+		if (!*argv[2] || *end || count < 1 || count > 1000)
+			return EXIT_FAILURE;
+		repeat_iterations = count;
+	}
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	if (hold)
@@ -4346,10 +4384,38 @@ int main(int argc, char **argv)
 					   DRM_GCN_FEATURE_TEXTURE_LINEAR);
 			goto out_close;
 		}
-		if (offset_only) {
-			if (features & DRM_GCN_FEATURE_BLIT_SCALED_RGB565)
-				test_offset_enlarge(fd);
-			else
+		if (reduce_repeat) {
+			if (features & DRM_GCN_FEATURE_BLIT_SCALED_RGB565) {
+				for (unsigned int i = 0; i < repeat_iterations && !failures; i++) {
+					if (reduce_content)
+						printf("REDUCE CONTENT: iteration=%u pattern=%u seed=%u\n",
+						       i, i % 8, (i + 1) * 0x9e3779b9U);
+					test_wide_scaled_reduce(fd, reduce_content ? (int)(i % 8) : -1, i);
+					if (!failures)
+						printf("REDUCE: %u/%u iterations\n", i + 1, repeat_iterations);
+				}
+			} else {
+				fail("scaled reduction feature unavailable");
+			}
+			goto out_close;
+		}
+		if (system_repeat) {
+			if ((features & DRM_GCN_FEATURE_BLIT_SCALED_SYSTEM_RGB565) &&
+			    (features & DRM_GCN_FEATURE_SYSTEM_GEM_LINEAR)) {
+				for (unsigned int i = 0; i < repeat_iterations && !failures; i++) {
+					test_full_system_layout(fd, DRM_GCN_GEM_LAYOUT_LINEAR, "linear");
+					if (!failures)
+						printf("SYSTEM: %u/%u iterations\n", i + 1, repeat_iterations);
+				}
+			} else {
+				fail("system enlargement features unavailable");
+			}
+			goto out_close;
+		}
+		if (offset_only || offset_repeat) {
+			if (features & DRM_GCN_FEATURE_BLIT_SCALED_RGB565) {
+				test_offset_enlarge(fd, offset_repeat ? repeat_iterations : 2000);
+			} else
 				fail_value("scaled RGB565 capability", features,
 					   DRM_GCN_FEATURE_BLIT_SCALED_RGB565);
 			goto out_close;
@@ -4359,7 +4425,7 @@ int main(int argc, char **argv)
 				for (unsigned int i = 1; i <= 100 && !failures; i++) {
 					printf("WIDE REDUCE: iteration %u uniform=%u\n", i,
 					       uniform_only);
-					test_wide_scaled_reduce(fd, uniform_only);
+					test_wide_scaled_reduce(fd, uniform_only ? -2 : -1, i);
 				}
 			} else {
 				fail_value("scaled RGB565 capability", features,
@@ -4461,7 +4527,7 @@ int main(int argc, char **argv)
 		if (features & DRM_GCN_FEATURE_BLIT_SCALED_RGB565)
 			test_wide_scaled_blit(fd);
 		if (features & DRM_GCN_FEATURE_BLIT_SCALED_RGB565)
-			test_wide_scaled_reduce(fd, false);
+			test_wide_scaled_reduce(fd, -1, 0);
 		if ((features & (DRM_GCN_FEATURE_SYSTEM_GEM |
 				 DRM_GCN_FEATURE_BLIT_SCALED_SYSTEM_RGB565 |
 				 DRM_GCN_FEATURE_SYSTEM_GEM_LINEAR |

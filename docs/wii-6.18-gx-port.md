@@ -18358,3 +18358,4015 @@ Stop on client failure; audit every intermediate summary even on client pass.
 A clean result permits same-module final-only control by disabling horizontal
 split. This is not yet 2,000-frame endurance or trace-free acceptance. No
 hardware result yet; installed provider unchanged, scratch on dev drive.
+
+
+#### Combined native splits pass the initial bounded control (2026-09-09)
+
+Resumed the pending 55533ec4f candidate from
+`/media/anolis/dev/wii-gcn-linear-v12-build`, SHA-256
+`68f7ff42de9958953f4a5af6e95903e84a7f3a432a78c37d86eecf773bb7556b`.
+The checksum-matched offscreen client is `4352cccc...`. Run with
+scale_system_split=1 scale_offset_split=1 scale_native_trace=1
+scale_native_preserve_fence=1 scale_native_split=1
+scale_native_horizontal_split=1; all six values were read back as Y while
+loaded. The client argument 120 includes frame 0, so this control actually
+checks 121 frames, not 120: 37,171,200 independent output pixels all pass.
+
+The complete streamed kernel log was trimmed from this cycle's connected
+marker and mechanically audited for ordered, unique stage/preservation/command
+records at every sequence and the expected four rectangle origins. All 484
+rectangle submissions have exact crop, horizontal and final results (1,452
+stage summaries), and all 968 prior-upload/preservation checks pass. No first
+mismatch records appear. Every horizontal stream is 640 quads/52,174 authored
+bytes/hash 82eeb331; final streams are 480 quads/39,113 bytes with the same
+four origin-dependent hashes as the preceding control. All fit the FIFO bound.
+No GPU timeout, FIFO stall or kernel fault appears.
+
+Cleanup and identity checks confirm gcn_gx absent, CPU console restoration,
+unchanged installed provider a2e7df8e..., and unchanged boot
+444193a6-aee4-4ae3-a619-4f6dd90fccf1 on 10.3.10.59. The local audit helper and
+all raw/trimmed logs, parameters, cleanup, and summary artifacts stay on the
+dev drive. Manifest SHA-256:
+
+```
+8850ba654daa721369b8d34f4bf0e651db7a83d885e6280e83791edebeb2033b  /media/anolis/dev/wii-gcn-native-both-split-120.sha256
+```
+
+This is a short diagnostic pass with preservation fencing and EFB snapshots,
+not 2,000-frame endurance or trace-free acceptance. It permits the planned
+same-module comparison disabling only scale_native_horizontal_split. No
+installed-provider promotion or Mesa/visual acceptance is claimed.
+
+
+#### Same-module horizontal-off control reproduces upstream fault (2026-09-09)
+
+Repeat the identical offscreen workload on the same 68f7ff42... module and
+4352cccc... client, changing only scale_native_horizontal_split=0. Readback
+confirms horizontal split N and all other five switches Y. Frames 0--64
+pass; frame 65 fails at (336,464), got ffbf expected ffff, and the runner
+stops with status 1. All 264 rectangle submissions through the failing frame
+were captured: 792 ordered stage summaries, 528 preservation checks and
+528 authored command records. The only new stage mismatches are sequence
+264, lower-right origin (320,240):
+
+- Crop is exact.
+- Horizontal EFB has one bad pixel at local (16,224), raw ARGB 00fff7ff,
+  quantized ffbf instead of ffff. The tiled copy matches that EFB exactly.
+- Final EFB propagates the sample to (336,464), with the same raw ARGB and
+  quantization. The final copy again matches its EFB exactly.
+
+Every prior-upload and post-preservation check passes. No other new stage
+mismatch occurs. Horizontal streams are now 320 quads/26,574 authored
+bytes/hash 5802ad10; final streams retain exactly the combined run's counts,
+bytes and four hashes. No GPU timeout, FIFO stall or kernel fault appears.
+Cleanup confirms gcn_gx absent, CPU console restored, the same boot, and
+installed provider a2e7df8e... unchanged. Manifest SHA-256:
+
+```
+ec9ec68210b9b344bbfe6d337cb24229eb06b14864c59abdf395a7a3af099c77  /media/anolis/dev/wii-gcn-native-final-only-120.sha256
+```
+
+The same-module comparison strengthens the evidence for horizontal primitive
+splitting in this exact native rectangle workload: combined splits pass the
+initial bounded control, while horizontal-off reproduces the earlier upstream
+fault. One passing interval does not establish a complete fix or an internal
+GPU mechanism. The earlier outside-rectangle failure remains a separate
+observed failure mode.
+
+Next control: 2,000 total offscreen frames with both native splits and the
+preservation checkpoint enabled, retaining every intermediate summary and
+stopping on the first client failure. Use client count 1999 because frame 0
+is included. Only after that passes should trace-free behavior be evaluated;
+these native switches currently depend on the exact native trace gate, so
+simply disabling tracing would also disable the candidate behavior. Preserve
+the predicate when separating diagnostics from behavior. Mesa and visual
+acceptance remain outstanding; do not promote the installed provider.
+
+
+#### Combined native splits fail endurance outside the active rectangle (2026-09-09)
+
+Run the planned count=1999 offscreen native-tiled control with unchanged
+55533ec4f / 68f7ff42... module and 4352cccc... client. Readback confirms
+scale_system_split, scale_offset_split, scale_native_trace,
+scale_native_preserve_fence, scale_native_split and
+scale_native_horizontal_split are all Y. Boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1 on 10.3.10.59.
+
+Frames 0--672 pass; frame 673 fails at (60,128), got b800 expected f800.
+The runner stops on this client failure with status 1, so the 2,000-frame
+endurance gate fails. There were 674 attempted frames, including the failed
+frame, and 2,696 complete rectangle submissions. Do not count the failed
+frame as a pass or extrapolate the earlier 121-frame pass to endurance.
+
+The complete live log passes mechanical sequence/order/origin/record-count
+checks: 8,088 stage summaries, 5,392 preservation records and 5,392 authored
+command records. Exactly one new stage mismatch occurs, in sequence 2694,
+upper-right origin (320,0):
+
+- Crop and horizontal stages are entirely exact.
+- Uploaded prior texture and post-preservation EFB are entirely exact.
+- After the active final submission, pixel (60,128), outside the active
+  x=320..639/y=0..239 rectangle, is raw ARGB 00bf0000, quantized b800
+  instead of expected f800. Final copy matches EFB exactly.
+
+All preservation checks pass throughout the run. The final summaries for
+sequences 2695/2696 compare against their already-damaged prior destination;
+their zero *new* mismatch counts do not mean the frame recovered. The
+independent client detects the retained bad upper-left pixel after all four
+rectangle operations. No other new stage mismatch occurs.
+
+Horizontal authored streams retain 640 quads/52,174 bytes/hash 82eeb331.
+Final streams retain 480 quads/39,113 bytes and the same four hashes; failing
+sequence 2694 has eaa53536. No FIFO-bound failure, GPU timeout, FIFO stall or
+kernel fault appears. Both native split switches therefore remain insufficient
+to prevent the earlier outside-rectangle fault. This run observed no horizontal
+fault, which is bounded evidence rather than proof that it cannot recur.
+
+The initial live SSH log transfer lagged while reading old ring messages.
+An additional on-device dmesg capture was started before the ring lost this
+cycle's connected marker. The live stream subsequently caught up and contains
+the entire cycle with no missing records. Additional log capture/transport
+changes timing; this remains a diagnostic workload. The runner unloaded the
+candidate and restored the CPU console. Independent cleanup verifies gcn_gx
+absent and installed provider a2e7df8e... unchanged.
+
+Do not proceed to trace-free acceptance or installed-provider promotion on
+this result. The next diagnostic should separate the final state transition
+from active geometry: after the existing verified preservation checkpoint,
+submit final texture/coordinate/scissor setup without vertices, fence and
+compare the full EFB to prior destination, then submit the unchanged active
+rows and retain the current final comparison. Keep the exact native predicate,
+both splits and default-off diagnostic behavior. A state-only mismatch would
+localize damage before geometry; a clean state checkpoint followed by damage
+would narrow it to the subsequent active submission/time interval. The extra
+fence changes timing and may suppress the fault, so a short clean run cannot
+be treated as a fix. No next-control implementation or hardware result yet.
+
+The compressed on-device log download was verified against remote SHA-256
+8b8d060a197918f244b36125a56daec3f824b84a752dd448c4061c5bc27a9323.
+All 18,873 native diagnostic lines agree exactly with the live capture. The
+slower uncompressed download was stopped after that verification; its partial
+file is retained and excluded from accepted evidence. Both collectors were
+stopped. The optimized auditor was rechecked against the earlier passing and
+failing controls without changing their recorded summaries. All evidence and
+the auditor snapshot are under the following manifest:
+
+```
+cdb4b943eb452c052182764cf005f05dce24ac52fe662bb57e5baa5303e65261  /media/anolis/dev/wii-gcn-native-both-split-2000.sha256
+```
+
+
+#### Isolate final state setup before native vertices (2026-09-09)
+
+Add scale_native_state_fence (default off), effective only inside the existing
+exact native trace gate and requiring scale_native_preserve_fence. Reject
+that gate's state-fence-without-preservation combination with -EINVAL before
+rendering. The final state-only submission contains texture setup, coordinate
+scale and scissor, followed by the existing PE-finish boundary. Snapshot the
+full 640x480 EFB and compare with the prior destination before emitting any
+active vertices. Reuse the allocated EFB snapshot buffer and existing prior
+comparison, labeling upload, preservation and final-state checks snapshot
+0, 1 and 2 respectively. Log state bytes/hash, then reset the FIFO cursor and
+emit the unchanged active row vertices with retained GPU state.
+
+PowerPC W=1 module build, strict checkpatch (zero errors/warnings/checks),
+and git diff --check pass. Candidate module SHA-256:
+`6001b632566947922ed6d0db2ed9ccf4265d374594bf3be237389c2e979b8992`.
+The previous 68f7ff42... module is retained on the dev drive. The initial
+control uses client count 119 (exactly 120 frames including frame 0), both
+native splits, preservation and state fences, and the existing system/offset
+split switches. The on-device log captures all intermediate comparisons.
+A short clean result validates the added checkpoint's operation, not a fix
+or the 2,000-frame endurance gate. Installed provider remains unchanged.
+
+
+#### Final-state checkpoint passes initial 120-frame control (2026-09-09)
+
+The 6001b632... module with unchanged 4352cccc... client passes all 120
+frames (36,864,000 independent output pixels). All seven diagnostic switches,
+including scale_native_state_fence, were read back as Y while loaded. The
+compressed on-device log matches remote SHA-256
+be51a6e1ed6b8c65d9c5f214640036c07f23479bb7cbf2daf3fab1e7e74f584a.
+
+The complete audit verifies 480 ordered rectangle submissions with their
+expected origins, 1,440 crop/horizontal/final summaries, 1,440 prior checks
+(snapshot 0/upload, 1/preservation and 2/final state), 480 state command
+records and 960 horizontal/final command records. Every comparison is exact;
+there are no first-mismatch records. Each state-only stream is 710 authored
+bytes. Each active final stream is 480 quads/38,408 bytes. State and final
+streams each have four stable origin-dependent hashes; horizontal commands
+remain 640 quads/52,174 bytes/hash 82eeb331. No GPU timeout, FIFO stall or
+kernel fault appears. FIFO capacity and completion checks pass.
+
+Cleanup verifies candidate unload, gcn_gx absent, CPU console restored,
+unchanged installed provider a2e7df8e... and unchanged boot
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. The on-device collector was stopped.
+Source patch, build log, auditor and complete evidence are saved under:
+
+```
+15fe6ef018f9331dd308e2d3df0a791320d751978a6b415b78924f9e295e160e  /media/anolis/dev/wii-gcn-native-state-120.sha256
+```
+
+This validates the checkpoint's operation for the short control. Since the
+preceding candidate first failed at frame 673, this clean 120-frame result
+does not yet distinguish state transition from active vertices or establish
+a fix. Next run count=1999 with the same seven switches, stopping on the first
+client failure and retaining every snapshot-2 result. Interpret a snapshot-2
+error as preceding active geometry, or a clean snapshot-2 followed by a final
+error as arising in the later active submission/time interval. If the added
+fence suppresses the fault for 2,000 frames, retain that timing limitation and
+the failing state-fence-off control; do not promote defaults or claim hardware
+mechanism identification. Mesa and trace-free/visual acceptance remain open.
+
+
+#### Fault follows a clean final-state checkpoint (2026-09-09)
+
+Run count=1999 on unchanged 6001b632... module and 4352cccc... client with
+all seven switches read back as Y. Frames 0--35 pass; frame 36 fails at
+(60,128), got b800 expected f800. The runner stops with status 1. Thus the
+planned 2,000-frame state-checkpoint endurance control fails after 37 attempted
+frames, including the failed frame; this is not a completed endurance pass.
+
+The on-device capture decompresses to the checksum recorded on the Wii:
+ab00ad7c77cf720c6c64c15c38766ab3590d69c250b01f80371aa908bd06f924.
+The complete audit verifies 148 rectangle submissions, 444 ordered stage
+summaries, 444 prior comparisons (snapshots 0/1/2), 148 state records and
+296 horizontal/final command records. Exactly one new stage error occurs:
+
+- Sequence 145 draws the upper-left rectangle, origin (0,0).
+- Crop and horizontal stages are exact.
+- Uploaded prior texture, preservation EFB and final-state-only EFB are all
+  exact. In particular, snapshot 2 is clean before the active vertices.
+- After the active draw, EFB pixel (60,128) is raw ARGB 00bf0000,
+  quantized b800 instead of expected f800. This coordinate is INSIDE this
+  active rectangle, unlike sequence 2694 of the preceding endurance test.
+  The final copied buffer matches the EFB exactly.
+
+No other stage or prior mismatch appears. Later rectangle summaries compare
+against their already-damaged prior destination and report no new errors;
+the independent client catches the retained pixel after all four operations.
+All authored command counts/bytes/hashes match the short state-checkpoint
+control, including the failing active stream's 480 quads/38,408 bytes/hash
+1b3e30b4 and its preceding 710-byte state stream/hash dc317085. No GPU timeout,
+FIFO stall, capacity failure or kernel fault appears.
+
+This localizes this occurrence after the clean state-only checkpoint, during
+the later active submission/time interval. It does not implicate the state
+setup as already having visibly damaged EFB at the checkpoint, and it shows
+that inserting this extra fence is not a complete fix. The repeated absolute
+location (60,128), raw colour 00bf0000 and RGB565 XOR difference 4000 in two
+separate runs is useful evidence. It does not establish a defective EFB cell,
+a scissor failure, or any other internal hardware mechanism. Active origins
+differ between those occurrences. Do not compare failure rates from these
+single runs or conflate the current inside-rectangle result with the earlier
+outside-rectangle result.
+
+Collector shutdown and independent cleanup verify gcn_gx absent, CPU console
+restored, unchanged installed provider a2e7df8e..., and unchanged boot
+444193a6-aee4-4ae3-a619-4f6dd90fccf1 on 10.3.10.59. Evidence manifest:
+
+```
+01eee685e55fd60d2c06b09fd4cc339604e5474553ae4309dabb1a7f1bd20a59  /media/anolis/dev/wii-gcn-native-state-2000.sha256
+```
+
+Next diagnostic: retain snapshot 2, insert a bounded, logged idle interval
+with no active vertices or copy commands, and take an additional full-EFB
+snapshot against the prior destination before submitting unchanged active
+rows. Keep the exact native gate and make this opt-in. This tests whether
+visible damage can arise during a no-draw interval after verified state,
+rather than assuming that the next primitive necessarily caused it. Measure
+the interval and preserve a zero-delay control; an added wait can change or
+suppress the intermittent fault. If idle remains clean and the subsequent
+active draw fails, retain that narrower boundary and consider a separate
+origin/pattern-shift control for the repeated coordinate. No implementation
+or result for that next control yet. Defaults, installed-provider promotion,
+Mesa and trace-free/visual acceptance remain unchanged and unvalidated here.
+
+
+#### Add measured no-draw interval before native vertices (2026-09-09)
+
+Add scale_native_idle_check (default off) and scale_native_idle_us (default
+0, requested range 0..100000 microseconds). Inside the unchanged native trace
+gate, require the state fence when idle checking is enabled and reject an
+out-of-range request before rendering. The state fence already requires the
+preservation fence. After snapshot 2, sleep only if the requested delay is
+nonzero, log requested microseconds and measured monotonic elapsed nanoseconds,
+then take snapshot 3 and compare full EFB with the prior destination. No draw,
+copy or GPU state commands are emitted in this interval. The reported elapsed
+time measures the wait, before the subsequent EFB read/compare. Scheduling can
+extend the requested delay; it is not a hard real-time upper bound.
+
+The active row stream is unchanged. Zero delay still performs and logs the
+extra snapshot, permitting a same-module control for the requested sleep.
+The check remains opt-in and restricted to the exact native predicate.
+PowerPC W=1 build, strict checkpatch (zero errors/warnings/checks), and
+git diff --check pass. Candidate SHA-256:
+`caef3e30564d8cfd33222b0d7f3cc0ec65022635148f43716f7a18187f7d091a`.
+Initial paired controls use count=119 (120 frames), the previous seven
+switches, scale_native_idle_check=1 and scale_native_idle_us=20000 or 0.
+Stop each run on its first client failure, audit all four prior snapshots and
+all stages, and verify cleanup before the next run. These are timing-changing
+diagnostics, not an acceleration repair or an endurance acceptance claim.
+
+
+#### Measured 20 ms idle checkpoint passes initial control (2026-09-09)
+
+On caef3e30... / 4352cccc..., all 120 frames pass (36,864,000 independent
+output pixels). Readback confirms all eight boolean controls Y and idle_us
+20000. The downloaded log matches remote SHA-256
+0734c04dd68b77b8b325c041536ce530cf905d46c5db098f7b27f8a183fdcd82.
+The complete audit verifies 480 rectangle submissions, 1,440 stage summaries,
+1,920 prior comparisons (four ordered snapshots per rectangle), 480 idle
+records, 480 state records and 960 horizontal/final command records.
+
+All comparisons pass, including all 480 snapshot-3 checks after idle.
+Measured wait durations span 20,032,115..38,253,267 ns; each meets the requested
+20,000 microsecond lower bound. State/horizontal/final authored counts, bytes
+and hashes match the preceding state-fence candidate. No first-mismatch,
+GPU-timeout, FIFO-stall or kernel-fault records appear. This is a short clean
+interval, not evidence that a no-draw interval can never exhibit the fault.
+
+Cleanup verifies gcn_gx absent, CPU console restored, unchanged installed
+provider a2e7df8e... and boot 444193a6-aee4-4ae3-a619-4f6dd90fccf1.
+The on-device collector is stopped. Evidence, auditor, source patch and build
+log are saved under:
+
+```
+1bab7cfcd2a59646698e314c4f843b85195d823b6303dd2a9e8dc794e49c3881  /media/anolis/dev/wii-gcn-native-idle20-120.sha256
+```
+
+Proceed to the same-module zero-requested-delay control, retaining snapshot 3.
+Neither this pass nor a short paired pass establishes endurance or a fix.
+
+
+#### Same-module zero-delay checkpoint also passes (2026-09-09)
+
+Repeat count=119 on the same caef3e30... module and 4352cccc... client,
+changing only scale_native_idle_us from 20000 to 0. All eight boolean
+controls remain Y and zero requested delay was read back while loaded.
+All 120 frames pass (36,864,000 output pixels). The downloaded log matches
+remote SHA-256 5cddf920afd4570784fd6cc394a13f0c358e95cc9e615c3f73b79fb1059d1aa6.
+
+Complete audit verifies 480 rectangles, 1,440 stage summaries, 1,920 ordered
+prior comparisons, 480 idle records, 480 state records and 960 horizontal/final
+command records, with no mismatch or fault records. The zero-delay probe
+measures 263..725 ns before logging and the full-EFB read; this does not include
+snapshot cost or mean zero time between snapshots. Both runs' authored
+state/horizontal/final count/byte/hash variants match exactly. All snapshot-3
+comparisons pass, as do their subsequent active draws in these short controls.
+
+Cleanup confirms gcn_gx absent, CPU console restored, collector stopped,
+unchanged installed provider a2e7df8e... and the same boot
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Evidence and auditor manifest:
+
+```
+64dc566db73f9b36647af69218dbbbdd40684d7899e2d4b0ae51585720cedddf  /media/anolis/dev/wii-gcn-native-idle0-120.sha256
+```
+
+The pair validates the idle-checkpoint apparatus with and without requested
+sleep. It does not reproduce or explain the intermittent error and does not
+prove that the idle wait or extra EFB read fixes it. Next bounded endurance
+control: count=1999 with idle_check=1 and idle_us=20000, retaining both splits,
+preservation and state fences and every intermediate record. Stop on first
+client failure. A snapshot-3 error following clean snapshot 2 would show damage
+before active vertices; a clean snapshot 3 followed by final damage would
+localize it to the later active submission/time interval. If the full 2,000
+frames pass, run the same-module zero-delay endurance comparison before making
+any timing inference. Keep all diagnostics opt-in; no default/provider
+promotion or trace-free, Mesa or visual-acceptance claim.
+
+
+#### User-shortened idle run is clean through 1,015 complete frames (2026-09-09)
+
+Started count=1999 on unchanged caef3e30... / 4352cccc... with all eight
+boolean controls Y and idle_us=20000, confirmed by readback. While the run
+was underway, the user asked about the 2,000-frame target and chose roughly
+1,000 frames as sufficient for this diagnostic. The target was a practical
+handoff cutoff, not a hardware requirement or a statistically calibrated
+acceptance threshold. Honor this shorter scope in follow-up work; do not
+silently reinstate 2,000-frame runs.
+
+Sent SIGTERM to this exact active test client. It finished rectangle sequence
+4061 (the first rectangle of frame 1015) before exiting. The recorded complete
+rectangle groups are sequences 1..4060, covering frames 0..1014: 1,015 complete
+frames, plus one rectangle of an incomplete next frame. The client source
+checks every frame before advancing; entry into sequence 4061 therefore
+supports completion of all preceding frame-level checks. The last periodic
+stdout checkpoint is frame 990. There is no final client PASS line, and the
+runner records TEST FAILED status 255 due to the requested termination. This
+is an intentional early stop, not an observed pixel mismatch or a completed
+2,000-frame pass. Artifact filenames retain the original -2000 plan label.
+
+The downloaded capture matches remote SHA-256
+4daa230d1f8c5092d991eb1e0aa287ada879baf17ef65b6e9ee96d1c35de4f42.
+An explicit user-stop audit retains the partial frame rather than discarding
+it. It verifies all 4,061 ordered rectangle submissions and origins, 12,183
+stage summaries, 16,244 prior checks (snapshots 0..3), 4,061 idle records,
+4,061 state records and 8,122 horizontal/final command records. Every stage
+and prior comparison is exact, including every idle snapshot. No first-error,
+GPU-timeout, FIFO-stall or kernel-fault records appear. Authored state and
+horizontal/final count/byte/hash variants match the short controls.
+
+Measured waits span 20,025,268..237,525,333 ns. Each meets the requested
+20 ms lower bound, but scheduling sometimes extends it substantially. This
+remains a timing-changing diagnostic including full-EFB reads. Three capture
+health checks confirm ongoing recording and sufficient space; the midpoint
+comparison scan also reported zero nonzero summaries. The final complete
+audit, not those samples, supports the clean intermediate result.
+
+The runner unloaded gcn_gx and restored the CPU console. Independent checks
+confirm gcn_gx absent, unchanged installed provider a2e7df8e..., and unchanged
+boot 444193a6-aee4-4ae3-a619-4f6dd90fccf1. The collector was stopped and
+all evidence preserved locally. Manifest:
+
+```
+709e24c79db522565f87d039d346ce1587d8ab6a649faaf36f46972eb158e68d  /media/anolis/dev/wii-gcn-native-idle20-2000.sha256
+```
+
+The result is clean over the observed 1,015-frame interval, with no evidence
+of corruption during idle or active drawing in this run. It does not establish
+that idle waiting fixes the intermittent fault. No zero-delay endurance run
+was started after the user's stop. The next useful comparison, if continuing,
+is about 1,000 frames on the same module with idle_us=0 and all checkpoints
+retained (use count=999 for exactly 1,000 frames). Retain the earlier failing
+state-fence-only controls and the timing caveat. No default changes or
+installed-provider promotion; Mesa and trace-free/visual acceptance remain
+outstanding.
+
+
+#### Zero-delay comparison passes exactly 1,000 frames (2026-09-09)
+
+Following the user's approximately 1,000-frame scope, run count=999 on the
+same caef3e30... module and 4352cccc... client. All eight boolean controls
+remain Y; idle_us=0 was verified while loaded. The client reports PASS for
+exactly 1,000 frames (0..999), 4,000 rectangle sequences and 307,200,000
+independently checked output pixels. This run completes normally with runner
+exit status 0, unlike the intentionally stopped preceding 20 ms run.
+
+The downloaded capture matches remote SHA-256
+9e60f267b8e759dd88c9df70fc4ce8060aaf3961bcd57909366cbcb2126eb779.
+The full audit accounts for all 4,000 ordered rectangle submissions and origins,
+12,000 stage summaries, 16,000 prior comparisons, 4,000 idle records,
+4,000 state records and 8,000 horizontal/final command records. Every stage
+and prior comparison is exact. No first-mismatch, GPU-timeout, FIFO-stall or
+kernel-fault records appear. Authored state and horizontal/final count/byte/hash
+variants match the preceding 20 ms run exactly.
+
+The zero-requested-delay timing probe spans 280..315,013 ns, excluding logging
+and the following full-EFB snapshot. No sleep is requested, but the extra
+snapshot and comparison still add elapsed time and CPU/EFB access. Thus the
+clean run shows the requested 20 ms sleep is not necessary for this observed
+clean interval. It does not show that the underlying fault is fixed or
+identify which timing/read/state effects suppress it. Keep the older failing
+state-fence-only controls as counterevidence to unconditional acceptance.
+
+The runner recorded TEST PASSED, unloaded the accelerator and restored the
+CPU console. Independent cleanup confirms gcn_gx absent, unchanged installed
+provider a2e7df8e... and boot 444193a6-aee4-4ae3-a619-4f6dd90fccf1.
+The on-device collector was stopped. Its raw log also includes post-cleanup
+background messages; all native records belong to the completed control.
+Evidence and auditor manifest:
+
+```
+a373a1d257e6a32726cccf2dfb8d8f7a0d94b18c0ec6093ad8809d154a85c077  /media/anolis/dev/wii-gcn-native-idle0-1000.sha256
+```
+
+Next useful same-module control: count=999 with scale_native_idle_check=0
+and idle_us=0, retaining both native splits, preservation and state fences,
+and the original system/offset split switches. This removes the extra
+snapshot-3 read/compare while leaving the active GPU state and vertex stream
+unchanged, rechecking the failing state-fence-only configuration on exactly
+the current binary. Use the three-snapshot state auditor for that control;
+absence of snapshot 3 is expected. Stop on first client failure, retain every
+intermediate record, and keep the 1,000-frame scope. A clean result still
+requires caution because the failure is intermittent; no generic predicate,
+default, installed-provider, Mesa or trace-free/visual acceptance change yet.
+
+
+#### Same-module extra-snapshot-off control reproduces outside damage (2026-09-09)
+
+Run count=999 on unchanged caef3e30... / 4352cccc..., changing only
+scale_native_idle_check from Y to N relative to the passing zero-delay run.
+All original seven controls remain Y; idle_us stays 0. The readbacks and
+binary hashes are saved. Before starting, /tmp had only 3.1 MB free. The two
+large prior captures were checksum-matched against their local copies, then
+compressed on the Wii and decompressed for checksum verification, freeing
+space to 14 MB. Their contents were preserved. Record this housekeeping;
+the controls do not have identical host/CPU memory pressure.
+
+Frames 0..304 pass; frame 305 fails at (60,128), got b800 expected f800.
+The runner stops with status 1 after 306 attempted frames, including the
+failed frame. The complete downloaded log matches remote SHA-256
+f987eccbc6ca8f9e13088c4f37ef9175940eda11ebb03723d2baca730c7dbdfa.
+The three-snapshot auditor verifies 1,224 ordered rectangle submissions,
+3,672 stage summaries, 3,672 prior checks, 1,224 state records and
+2,448 horizontal/final command records. No native-idle or snapshot-3 records
+appear, as expected for the disabled extra checkpoint.
+
+Exactly one new stage mismatch occurs in sequence 1222, upper-right origin
+(320,0). Crop, horizontal, prior texture, preservation EFB and final-state
+snapshot 2 are all exact. The active final submission subsequently damages
+EFB pixel (60,128), outside that rectangle, to raw ARGB 00bf0000 / RGB565
+b800 instead of f800. The final copied buffer matches the damaged EFB
+exactly. Later sequences 1223/1224 preserve the already-damaged prior pixel;
+their zero-new-mismatch summaries do not imply recovery. The independent
+frame oracle catches the retained error. This repeats the same absolute
+coordinate and colour/bit difference observed earlier with different active
+origins; it does not by itself identify a hardware defect.
+
+No other stage/prior mismatch or GPU-timeout/FIFO-stall/kernel-fault record
+appears. Every authored state and horizontal/final count/byte/hash variant
+matches the passing same-module zero-delay-with-extra-read run. Failing
+sequence 1222 has state hash 145e7dad and active hash e9c9464c. Thus the
+current binary can still reproduce the fault when the extra read is removed;
+the earlier clean interval was not simply explained by a new module binary.
+The extra snapshot also changes elapsed time, CPU/EFB access and scheduling,
+so this pair does not distinguish the read from its timing effects.
+
+Measured kernel-log timestamp intervals from snapshot-2 summary to authored
+final-command summary illustrate that confound: with the extra read,
+4,000 samples span 110.431..626.179 ms, median 118.8965 ms; without it,
+1,224 samples span 14.629..44.536 ms, median 15.8025 ms. These include CPU
+work, logging and scheduling and are not isolated GPU latency measurements.
+A zero requested sleep therefore still adds about 100 ms in the passing
+extra-read control relative to this failing control.
+
+Cleanup confirms gcn_gx absent, CPU console restored, collector stopped,
+unchanged installed provider a2e7df8e... and boot
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Evidence, archive checks, auditor and
+timing summary manifest:
+
+```
+dff417dcd51acec369476f329181b14e609fc6543266fd4c829ddc2d53872512  /media/anolis/dev/wii-gcn-native-idle-off-1000.sha256
+```
+
+Next bounded diagnostic: add an opt-in wait-only mode after snapshot 2 that
+requests 100,000 us, logs actual elapsed time, and emits no GPU commands or
+additional EFB reads before unchanged active rows. This approximately replaces
+the added checkpoint's observed median elapsed time without its read/compare
+work; it is not an exact schedule match. Retain both splits and preservation/
+state fences, use up to 1,000 frames, and stop on first client failure. Compare
+against zero-wait/no-extra-read on the same new binary if useful. A clean
+wait-only interval would show that an extra EFB read is not necessary for
+that observed clean interval; a failure would retain read-specific effects
+as a hypothesis without proving them. Do not broaden defaults or promote
+the installed provider. No implementation or hardware result for wait-only
+yet; trace-free, Mesa and visual acceptance remain open.
+
+
+#### Add opt-in wait-only native control (2026-09-09)
+
+Add scale_native_idle_wait_only (default off), requiring native idle checking
+inside the exact native trace predicate. Retain the state/preservation-fence
+requirements and existing 0..100000 us request bound. Log readback=0 when
+wait-only skips snapshot 3; otherwise the existing idle snapshot behavior is
+unchanged. The waiting path authors no GPU commands and performs no EFB read
+in the added interval. It logs actual elapsed monotonic time, then submits
+unchanged active row vertices with retained final state. This is a timing
+control, not a repair or a new default.
+
+PowerPC W=1 build, strict checkpatch (zero errors/warnings/checks), and
+git diff --check pass. Candidate SHA-256:
+`b69ac6b287d0d85ceb8d47a686740335f36d73f4ebe6df69209ee49f81841a3a`.
+Run count=999 (1,000 frames / 4,000 rectangle sequences), retaining all prior
+boolean controls, idle_us=100000 and idle_wait_only=1. Audit three prior
+snapshots, measured waits/readback=0, and unchanged command hashes. Stop on
+first client failure. The requested 100 ms approximates the earlier extra
+read's added median interval; actual schedules need not match. A final error
+would lie after clean snapshot 2 within the combined idle/active interval,
+since no intermediate snapshot is taken at the end of the wait.
+
+
+#### Wait-only 100 ms control passes 1,000 frames (2026-09-09)
+
+Candidate b69ac6b2... completed count=999 with client PASS, 1,000 frames,
+4,000 rectangle sequences and 307,200,000 checked destination pixels;
+runner exited 0. Both native splits, preservation/state fences and idle
+checking remained enabled, with idle_us=100000 and idle_wait_only=1.
+
+The checksum-verified complete on-device capture audits exactly 12,000
+crop/horizontal/final stage summaries, 12,000 prior summaries (snapshots
+0/1/2), 8,000 horizontal/final command summaries, 4,000 state summaries and
+4,000 idle records. All mismatch counts are zero, with no first-mismatch,
+GPU-timeout/FIFO-stall/kernel-fault records. Every idle record has readback=0;
+there are no snapshot-3 reads. Actual measured waits span
+100.046683..345.137975 ms. Authored command/state count, byte and hash variants
+match both the prior extra-read pass and no-extra-read failure.
+
+Thus an extra EFB read is not necessary for this observed clean interval:
+a requested 100 ms wait without that read also passed. This supports timing
+as a useful diagnostic variable, but does not establish a repair or isolate
+a hardware cause. The new binary still needs its own zero-wait control to
+strengthen the comparison; earlier no-extra-read failure used caef3e30....
+Next bounded diagnostic is the same b69ac6b2... module and controls with
+idle_us=0, idle_wait_only=1, up to 1,000 frames / 4,000 sequences, stopping
+on first client failure. Do not broaden defaults or promote the provider.
+Trace-free, Mesa and visual acceptance remain open.
+
+Cleanup confirms gcn_gx absent and CPU console restored. The collector was
+stopped, its archive downloaded and decompressed SHA-256 matched the remote
+raw capture (76cbb6f88988de9812c60a9c0019f79b8618ae0928090b400631351263be3282).
+Installed provider remains a2e7df8e... and boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Evidence includes the exact candidate,
+source patch, build log, auditor, comparison and complete capture. Manifest:
+
+```
+a8e7070fda87a8820104aea10066bbd8a683ecd6636de15dd25300f4d65e3f2a  /media/anolis/dev/wii-gcn-native-wait100-1000.sha256
+```
+
+
+#### Same-binary zero-wait control fails at frame 171 (2026-09-09)
+
+Reused checksum-verified b69ac6b2... module and 4352cccc... client from the
+100 ms wait-only pass, on the same boot. Requested count=999, retaining all
+split/preservation/state/idle controls and idle_wait_only=1, changing only
+idle_us from 100000 to 0. Client stopped on first failure at frame 171
+(zero-based), after 172 attempted frames / 688 rectangle sequences; runner
+exit status 1. The runtime sysfs query arrived after automatic module unload,
+so it did not capture parameter values. All 688 kernel idle records confirm
+requested_us=0 and readback=0; stage/prior/state records confirm the retained
+diagnostic paths. Measured idle intervals span 98..691 ns, excluding logging
+and subsequent work.
+
+The complete checksum-verified capture contains 2,064 stage summaries,
+2,064 prior summaries (snapshots 0/1/2), 1,376 command summaries and 688
+state/idle summaries. The only stage failure is sequence 685, origin (0,0),
+final: pixel (60,128), inside the active upper-left rectangle, is b800 rather
+than f800; raw EFB ARGB=00bf0000. Crop and horizontal checks and all three
+prior snapshots are clean. Final efb_mismatches=1 and copy_mismatches=0:
+the copy faithfully reflects the corrupted EFB pixel. Later rectangles
+preserve it without new errors and the client detects it at frame end.
+There are no other prior/stage failures or timeout/stall/kernel-fault records.
+All authored state/command count, byte and hash variants match the same-binary
+100 ms passing run; failing sequence uses state dc317085 and final 1b3e30b4.
+
+This same-binary pair strengthens evidence that elapsed time affects the
+observed failure rate: no additional EFB read is present in either run,
+100 ms passed 1,000 frames, while zero requested wait failed at frame 171.
+It does not establish a reliable threshold, prove a hardware mechanism or
+justify a production sleep. The corruption lies after clean snapshot 2 in
+the combined idle/active interval. Next bounded diagnostic: same binary and
+controls with idle_us=20000, idle_wait_only=1, up to 1,000 frames / 4,000
+sequences, stopping on first client failure, to sample an intermediate wait.
+Defaults/provider remain unchanged; trace-free, Mesa and visual acceptance
+remain open.
+
+Cleanup confirms gcn_gx absent, CPU console restored, and collector stopped.
+Installed provider remains a2e7df8e... and boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Downloaded archive decompressed SHA-256
+matches remote raw capture afed6bca04dc40fad8ba30b5db8ce1565c7da60519f12948b924897a9197a043.
+Evidence manifest:
+
+```
+dc2b6a5c6cb8f533dbbb0a96e47d904706d163b970540a1f2da55f2146994894  /media/anolis/dev/wii-gcn-native-wait0-1000.sha256
+```
+
+
+#### Same-binary 20 ms wait-only control fails at frame 140 (2026-09-09)
+
+Reused verified b69ac6b2... module and 4352cccc... client on the same boot.
+Requested count=999 (up to 1,000 frames / 4,000 sequences), retaining both
+splits, preservation/state fences and idle checking with idle_wait_only=1,
+changing only idle_us to 20000. Live sysfs confirms all requested controls.
+Client stopped at first failure, frame 140 (zero-based), after 141 attempted
+frames / 564 sequences; runner exited 1.
+
+Checksum-verified capture audits 1,692 stage summaries, 1,692 prior summaries
+(snapshots 0/1/2), 1,128 command summaries and 564 state/idle summaries. All
+idle records have requested_us=20000 and readback=0, no snapshot 3. Actual
+waits span 20.033679..221.642518 ms. State/command count, byte and hash variants
+match the same-binary zero-wait failure and 100 ms pass.
+
+The only mismatch is final sequence 562, origin (320,0): pixel (60,128) is
+b800 instead of f800, raw EFB ARGB=00bf0000. It lies outside the active
+upper-right rectangle. Crop/horizontal checks and snapshots 0/1/2 are clean;
+failing sequence's actual wait is 21.923194 ms, state hash 145e7dad and active
+hash e9c9464c. Final efb_mismatches=1, copy_mismatches=0, so the copy matches
+the corrupted EFB pixel. Subsequent rectangles preserve that pixel without
+new errors and the client catches it at frame end. No other stage/prior
+failure or timeout/stall/kernel-fault record appears.
+
+Thus 20 ms wait-only does not prevent the recurring fault. One zero-wait
+failure at frame 171, one 20 ms failure at frame 140, and one 100 ms pass
+through 1,000 frames do not establish a monotonic rate or a safe threshold.
+The repeated absolute coordinate with different active origins still does
+not prove a hardware defect. Next bounded diagnostic: repeat the same-binary
+100 ms wait-only control for up to 1,000 frames / 4,000 sequences, stopping
+on first failure, to check repeatability before narrowing the delay further.
+No defaults or installed provider changed; trace-free, Mesa and visual
+acceptance remain open.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Downloaded archive decompressed SHA-256
+matches remote raw capture f0ead66a14571010121c7c7efa12f4aeeecb6d176815dacdb9e2abcc8dbafd0f.
+Evidence manifest:
+
+```
+3b3b594cf7154159322883dee5965f814569e8b20165ebe0e9639527660ab4be  /media/anolis/dev/wii-gcn-native-wait20-1000.sha256
+```
+
+
+#### Repeated 100 ms wait-only control fails at frame 313 (2026-09-09)
+
+Repeated the exact b69ac6b2... binary, 4352cccc... client and first 100 ms
+wait-only parameters on the same boot, targeting count=999 (1,000 frames /
+4,000 sequences). Live sysfs confirms all retained splits/fences/idle controls,
+idle_us=100000 and idle_wait_only=1. Client stopped on first failure at frame
+313 (zero-based), after 314 attempted frames / 1,256 sequences; runner exit 1.
+
+Checksum-verified complete capture audits 3,768 stage summaries, 3,768 prior
+summaries (snapshots 0/1/2), 2,512 command summaries and 1,256 state/idle
+summaries. All idle records have requested_us=100000 and readback=0; no
+snapshot 3. Measured waits span 100.042699..328.399489 ms. Authored state and
+command count/byte/hash variants match the prior same-binary 0, 20 and 100 ms
+runs exactly.
+
+The sole stage failure is final sequence 1254, origin (320,0), pixel (60,128)
+outside the active upper-right rectangle: actual b800, expected f800, raw
+EFB ARGB=00bf0000. Crop/horizontal and all prior snapshots are clean. The
+failing sequence waited 102.562946 ms after clean snapshot 2, then authored
+state/final variants 145e7dad/e9c9464c (state was authored before snapshot 2).
+Final efb_mismatches=1, copy_mismatches=0, so copying reflects the corrupted
+EFB pixel. Later rectangles preserve it without new errors; the client
+catches it at frame end. No other stage/prior mismatch or timeout/stall/
+kernel-fault record appears.
+
+This rejects 100 ms wait-only as a sufficient prevention mechanism: the
+first 1,000-frame pass was not reliably repeated. All tested requested waits
+(0, 20 and 100 ms) have now failed with the same coordinate/value signature.
+The two 100 ms runs observed one failed frame in 1,314 attempted frames,
+but first-failure stopping and this small sample do not establish a stable
+per-frame probability or comparative rate. Do not infer a safe delay
+threshold, accept recurring corruption, or promote a sleep-based workaround.
+The underlying cause remains unresolved.
+
+Next bounded control: on the same b69ac6b2... binary restore the extra EFB
+snapshot with idle_us=0 and idle_wait_only=0, leaving all other controls
+unchanged, up to 1,000 frames / 4,000 sequences and stop on first failure.
+The earlier extra-read pass used caef3e30..., so this checks that observation
+on the current binary after the intervening failures. A clean result would
+still be diagnostic evidence, not a fix or proof of a read-specific cause.
+No defaults or installed provider changed; trace-free, Mesa and visual
+acceptance remain open.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Both original and retry downloads exited
+0 and decompressed identically, matching remote raw SHA-256
+1ccf6d26f43d9451fec0f14a07f722d4972ba2413626f6656938f3d6da1fd3a7.
+Evidence manifest:
+
+```
+de482132094c85672bd5efaf9256e12edd5d9ffacb9300cea89035427a4bbd6e  /media/anolis/dev/wii-gcn-native-wait100-repeat1000.sha256
+```
+
+
+#### Current-binary extra-read control fails at frame 693 (2026-09-09)
+
+Reused verified b69ac6b2... module and 4352cccc... client on the same boot,
+count=999 (up to 1,000 frames / 4,000 sequences), retaining both splits,
+preservation/state fences and idle checking. Set idle_us=0 and
+idle_wait_only=0 to restore full snapshot 3; live sysfs confirms parameters.
+Client stopped at first failure, frame 693 (zero-based), after 694 attempted
+frames / 2,776 sequences; runner exit 1.
+
+Checksum-verified complete capture audits 8,328 stage summaries, 11,104 prior
+summaries (snapshots 0/1/2/3), 5,552 command summaries and 2,776 state/idle
+summaries. Every idle record confirms requested_us=0 and readback=1; every
+sequence has snapshot 3. Idle timing spans 98..527 ns, excluding the extra
+read/compare work. State/command count, byte and hash variants match all
+preceding same-binary controls and the earlier caef3e30... idle0-1000 pass.
+
+Only final sequence 2773, origin (0,0), fails: pixel (60,128), inside the
+active upper-left rectangle, is b800 instead of f800, raw EFB ARGB=00bf0000.
+Crop/horizontal and all four prior snapshots are clean, including snapshot 3
+immediately before authored active vertices. Failing state/final hashes are
+dc317085/1b3e30b4. The post-draw EFB snapshot is taken before final copying;
+final efb_mismatches=1 and copy_mismatches=0 show the copy matches the corrupted
+EFB pixel. Later rectangles preserve it without new errors and the client
+catches it at frame end. No other stage/prior mismatch or timeout/stall/
+kernel-fault record appears.
+
+This rejects the extra full EFB read as reliable prevention as well as the
+previously rejected wait-only workaround. Earlier clean intervals remain
+valid observations, but neither intervention establishes a fix. This failure
+narrows the observed change to after clean snapshot 3 and before the
+post-active-draw EFB snapshot. The repeating absolute coordinate and red-bit
+loss, across both inside/outside active origins, merit a content/location
+control; they do not prove a physical EFB defect.
+
+Next proposed bounded diagnostic: keep the driver binary and geometry fixed,
+use a separately archived client with an explicit diagnostic palette swap
+(red and white quadrants) and matching expected-image oracle. White at the
+usual red location retains the affected red bit while changing other colour
+channels; red moves to another quadrant. Observe whether any fault stays at
+(60,128), follows red content or changes signature. Preserve all other pattern
+features and default client behavior; inspect source/oracle before running.
+Use no added wait or extra read, up to 1,000 frames / 4,000 sequences, stopping
+on first failure. A clean interval would remain inconclusive. This palette
+control is proposed, not implemented or tested in this section. Do not keep
+sweeping delays as if they establish a correctness fix.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Download exited 0 and decompressed SHA-256
+matches remote raw capture 393b1cf5ff31e6abf65bfc43f7435a054997814f934e9715a4a6dd79265d811e.
+No defaults/provider changed; trace-free, Mesa and visual acceptance remain
+open. Evidence manifest:
+
+```
+5950838ddf3ae01b1d8a867a609bdfd873f706c05f2af244563b7ef9a3aef599  /media/anolis/dev/wii-gcn-native-read0-repeat1000.sha256
+```
+
+
+#### Add opt-in red/white palette control (2026-09-09)
+
+Client accepts --swap-red-white after --offscreen, swapping only base red
+and white quadrants before unchanged border/grid/checker/marker overlays.
+Default palette and argument behavior remain unchanged; invalid extra flags
+are rejected. Source fill and expected-image oracle call the same pattern
+function, retaining all geometry and draw calls. Diagnostic startup logs the
+palette explicitly. Driver remains exact b69ac6b2... binary.
+
+Static PowerPC client build passes -Wall -Wextra -Werror, strict checkpatch
+reports zero errors/warnings/checks, and git diff --check passes. A host
+reference check compares all pixels at both 320x240 and 640x480 for frames
+0,4,140,171,313,693,999: 5,376,000 comparisons confirm default unchanged and
+swap matches a reference with only original palette constants exchanged.
+Sentinels confirm white at (60,128) and red at (380,368) on frame 0.
+Client SHA-256: 8a61c0c0ef41c7d0671b08e7ea789434cff693a4da670e842d638705ed05dccc.
+
+Run up to count=999 (1,000 frames / 4,000 sequences), stopping at first
+client failure. Retain both splits, preservation/state fences and idle
+checking, idle_us=0 and idle_wait_only=1, so no extra wait or snapshot 3.
+This changes client colour data and its oracle, not the driver/geometry.
+Observe location and raw colour/bit signature; no result is asserted yet.
+
+
+#### Palette swap fails at new red location, frame 792 (2026-09-09)
+
+Verified driver b69ac6b2... and diagnostic client 8a61c0c0... ran the swapped
+red/white palette with zero requested wait and no extra read, retaining
+both splits and preservation/state fences. Client logged the diagnostic
+palette and live sysfs confirmed controls. It stopped at first failure at
+frame 792 (zero-based), after 793 attempted frames / 3,172 sequences; runner
+exit 1. Planned maximum remained 1,000 frames / 4,000 sequences.
+
+Checksum-verified complete capture audits 9,516 stage summaries, 9,516 prior
+summaries (0/1/2), 6,344 command summaries and 3,172 state/idle summaries.
+Every idle record confirms requested_us=0/readback=0, elapsed 98..527 ns.
+All authored state/command count, byte and hash variants match the prior
+same-driver controls. Only final sequence 3172, origin (320,240), fails:
+pixel (607,343), inside the active lower-right rectangle, expected f800,
+actual d800, raw EFB ARGB=00df0000. State hash 3e0dd295, final hash fe8a5430.
+Crop/horizontal and every prior snapshot are clean. Final efb_mismatches=1,
+copy_mismatches=0 show copying faithfully reflects the corrupted EFB pixel.
+No other stage/prior mismatch or timeout/stall/kernel-fault record appears.
+
+The fault is no longer confined to (60,128). The new bad pixel lies in the
+quadrant changed from white to red, while the old position is now in the
+white quadrant. Its raw red deficit is 0x20 (RGB565 bit 0x2000), versus the
+earlier 0x40 (RGB565 bit 0x4000). It is not the old coordinate translated by
+one quadrant: new local coordinate (287,103), old (60,128). This is evidence
+against an explanation limited to one fixed pixel/bit. Colour/data-dependent
+behavior is a hypothesis worth testing, not a proven cause or evidence that
+a palette change is a fix. Client binary and data changed in this control;
+no stable failure rate can be inferred from the single first-failure run.
+
+Next bounded control: use the exact same 8a61c0c0... client without
+--swap-red-white, preserving all driver parameters, for up to 1,000 frames /
+4,000 sequences and stop on first failure. This restores original colours
+without changing either executable, checking the original signature after
+the palette experiment. Do not promote defaults/provider or claim a hardware
+root cause. Trace-free, Mesa and visual acceptance remain open.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Download exited 0 and decompressed SHA-256
+matches remote raw capture 6ee219505eb9a9410dfb5e64d21a1c45a96f640c8a95e9f1150e4c705b955d4a.
+Evidence includes archived client binary/source, source patch, build log,
+reference-check source/results and full audit. Manifest:
+
+```
+367330b29aa89cc722fcdbd8a41edf364844ef6e2badd007f062829136cb836a  /media/anolis/dev/wii-gcn-native-palette1000.sha256
+```
+
+
+#### Original palette restores old signature on same executables (2026-09-09)
+
+Reused exact b69ac6b2... driver and 8a61c0c0... client from palette1000,
+removing only --swap-red-white. Live sysfs confirms identical splits/fences,
+idle_us=0 and idle_wait_only=1; no extra wait/read. Planned count=999
+(1,000 frames / 4,000 sequences), stopping on first client failure. Client
+failed frame 770 (zero-based), after 771 attempted frames / 3,084 sequences;
+runner exit 1.
+
+Checksum-verified full capture audits 9,252 stage summaries, 9,252 prior
+summaries (0/1/2), 6,168 command summaries and 3,084 state/idle summaries.
+Every idle record confirms requested_us=0/readback=0, measured 98..300082 ns.
+All authored state/command count, byte and hash variants match palette1000
+and the earlier original-palette zero-wait control.
+
+The sole stage failure is final sequence 3082, origin (320,0): the old pixel
+(60,128), outside the active upper-right rectangle, is b800 instead of f800,
+raw EFB ARGB=00bf0000. Crop/horizontal and all prior snapshots are clean.
+Final efb_mismatches=1/copy_mismatches=0 shows the copy matches the corrupted
+EFB pixel. Subsequent rectangles preserve it without new errors and the
+client catches it at frame end. No other stage/prior mismatch or timeout/
+stall/kernel-fault record appears.
+
+Restoring the original palette restored the original coordinate/value
+signature without changing either executable. The preceding swap failed at
+(607,343) in the newly red quadrant with raw00df0000, and this restoration
+failed at (60,128) in the original red quadrant with raw00bf0000. This
+strengthens colour/data dependence as a diagnostic hypothesis and weakens
+an explanation confined to one absolute pixel/bit. It does not prove that
+red alone causes the fault, distinguish texture/TEV/EFB mechanisms, or
+establish a reliable failure rate. Similar failure-frame counts (792 vs770)
+are not evidence of deterministic timing.
+
+Next proposed bounded diagnostic: add an opt-in full-pattern RGB channel
+rotation (red to green, green to blue, blue to red), applied after pattern
+overlays and identically by source generation and expected-image oracle.
+Keep default output intact, leave palette swap disabled, validate the
+rotation/reference and test up to 1,000 frames / 4,000 sequences with the
+same driver controls and first-failure stop. This changes which channel
+carries each spatial pattern without changing geometry; inspect whether
+errors follow a channel, a location, or neither. It is proposed, not yet
+implemented/tested. Do not infer a production fix from any clean interval.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Download exited 0; decompressed SHA-256
+matches remote raw capture f7333e7c3c03d6e2db0d3e695cef6e8cc095098afe9fccdbf55b72f9d7808acd.
+No defaults/provider changed; trace-free, Mesa and visual acceptance remain
+open. Evidence manifest:
+
+```
+033b1360283d8f98685d36bdab16ebb5b382e440586441152a57f0424c0a595b  /media/anolis/dev/wii-gcn-native-palette-baseline1000.sha256
+```
+
+
+#### Add opt-in full-pattern RGB rotation (2026-09-09)
+
+Client accepts --rotate-rgb after --offscreen, mutually exclusive with
+--swap-red-white. Rotate complete pattern after overlays: (R,G,B) -> (B,R,G),
+so red becomes green, green blue, blue red. Default and palette-swap paths
+are preserved. Source generation and full-frame oracle use the same pattern
+function; geometry and driver controls are unchanged. Startup logs rotate-rgb.
+
+Static PowerPC build passes -Wall -Wextra -Werror, strict checkpatch reports
+zero errors/warnings/checks, and git diff --check passes. Host comparison
+checks 8,064,000 pixels across default, swap and rotation modes at 320x240
+and 640x480 for frames 0,4,140,171,313,693,999. Rotation reference separately
+extracts source R/G/B bytes and reassembles (B,R,G); default and swap match
+prior reference patterns. Client SHA-256:
+d1a9a55d575b9efa1f0f6eb7ec6fa7b5ff2ad5d98c538a1ff75d924c656a1a66.
+Driver stays exact b69ac6b2.... Run count=999, up to 1,000 frames / 4,000
+sequences, first-failure stop; both splits/preservation/state fences retained,
+idle_us=0 and idle_wait_only=1. No added wait or extra EFB read. Hardware
+result pending; this remains a diagnostic, not a proposed production fix.
+
+
+#### RGB rotation fails in newly red lower-left quadrant (2026-09-09)
+
+Verified b69ac6b2... driver and d1a9a55d... client ran --rotate-rgb with
+unchanged geometry, splits/preservation/state fences, idle_us=0 and
+idle_wait_only=1. Live settings and diagnostic startup log confirm control.
+Planned count=999, up to 1,000 frames / 4,000 sequences. Client stopped at
+first failure, frame 984 (zero-based), after 985 attempted frames / 3,940
+sequences; runner exit 1.
+
+Checksum-verified complete capture audits 11,820 stage summaries, 11,820
+prior summaries (0/1/2), 7,880 command summaries and 3,940 state/idle summaries.
+Every idle record confirms requested_us=0/readback=0, elapsed 98..741 ns.
+Authored state/command count, byte and hash variants match the earlier
+palette and baseline controls. The sole failure is final sequence 3940,
+origin (320,240): pixel (94,303), outside the active lower-right rectangle,
+expected f800, actual e800, raw EFB ARGB=00ef0000. The bad pixel lies in the
+lower-left quadrant, changed from blue to red by rotation. All crop/horizontal
+and prior snapshots are clean, including prior state snapshot of that pixel.
+Final efb_mismatches=1/copy_mismatches=0 shows copying reflects corrupted EFB.
+No other stage/prior mismatch or timeout/stall/kernel-fault record appears.
+
+Raw red lost bit 0x10 (RGB5650x1000), versus earlier original-palette0x40
+and red/white-swap0x20. Red-channel losses now appear at (60,128) upper-left,
+(607,343) lower-right and (94,303) lower-left under different colour controls.
+The current failure is outside the active rectangle, so it cannot simply
+be attributed to writing this pixel as part of the requested active draw.
+This strengthens colour/data dependence and rejects an explanation limited
+to one fixed pixel/bit; it does not identify a hardware cause, prove exclusive
+red sensitivity, or establish comparative rates. The rotation client binary
+changed, and only one rotation run is available. This near-target failure
+also illustrates why a long clean prefix is not a correctness fix.
+
+Next proposed diagnostic is failure-local evidence rather than another delay
+or palette sweep: detect the first mismatch in the existing post-active EFB
+snapshot before the final copy overwrites crop, and capture the corresponding
+preservation texture or active horizontal texture value (selected by whether
+the bad pixel is inside the active rectangle), original source/prior values,
+and repeated raw EFB reads without intervening GPU commands. Inspect exact
+texture mapping/cache ownership before implementation; do not mutate buffers
+or change rendering. This would distinguish CPU-visible texture corruption
+from an EFB-only discrepancy and test repeatability of the raw peek, without
+assuming either is the root cause. No such instrumentation is implemented
+or tested yet. Preserve default-off gating and first-failure stop, with a
+maximum 1,000-frame run. No production workaround is justified.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Download exited 0; decompressed SHA-256
+matches remote raw capture daf36c71b537111ce9deb33819a4ede88e144f3ce89cb997ef8695c6e80b9f1d.
+No defaults/provider changed; trace-free, Mesa and visual acceptance remain
+open. Evidence includes exact client/source, build/patch, reference test and
+full audit. Manifest:
+
+```
+a45e09bd4645252166b5353e5071b093f6fb39c5657450317ec05a231c790073  /media/anolis/dev/wii-gcn-native-rotate1000.sha256
+```
+
+
+#### Add default-off first-failure texture/EFB probe (2026-09-09)
+
+Add scale_native_failure_probe, gated by the exact native trace and requiring
+state fence (which requires preservation fence). Scan the existing post-active
+EFB snapshot before final copy; at the first mismatch per module load record
+source/prior, expected and raw snapshot values, selected texture coordinates,
+cached and post-invalidation CPU reads, and three raw EFB peeks with status.
+Choose horizontal texture at local (x-origin_x,y-origin_y), stride512 extent
+512x256, for active pixels; choose preserved crop at absolute coordinates,
+stride640 extent640x480, otherwise. Exact native geometry fixes those extents.
+Horizontal was GPU-written and invalidated; preserved crop was CPU-filled and
+flushed. Both are clean GPU inputs at this point, before the copy reuses crop.
+Invalidate only the selected full texture on failure; author no GPU commands
+or texture writes in the probe. Continue existing copy and client oracle.
+Capture latch is protected by submission mutex and resets on module load.
+A peek mapping error is logged, not hidden; do not interpret peek values when
+peek_ret is nonzero. The extra CPU snapshot scan can perturb timing even
+though extra EFB reads/cache invalidation occur only after detecting failure.
+
+PowerPC W=1 build, strict checkpatch (zero errors/warnings/checks), and
+whitespace checks pass. Host stub tests validate clean path, first-failure
+latch, preserved/active texture selection, post-invalidation reload and three
+peek coordinates; they do not validate physical cache/MMIO behavior.
+Candidate module SHA-256:
+41acc1951c4da631329ace2ab54bc8340a7d8b57b74f6b1d69a47bfddf5d676f.
+Use d1a9a55d... client with original colours (no palette flags), retaining
+both splits, preservation/state fences, idle_us=0 and idle_wait_only=1.
+Target count=999, up to1,000 frames /4,000 sequences, first client failure
+stop. Hardware result pending. No defaults/provider promotion.
+
+
+#### Probe: correct active texture, repeatable corrupted EFB (2026-09-09)
+
+Verified 41acc195... module and d1a9a55d... client with original colours,
+scale_native_failure_probe=1 and retained splits/preservation/state fences,
+idle_us=0/idle_wait_only=1. Live sysfs confirms controls. Planned count=999
+(up to1,000 frames /4,000 sequences); client stopped at first failure, frame
+442 (zero-based), after443 attempted frames /1,772 sequences; runner exit1.
+
+Checksum-verified complete capture audits 5,316 stage summaries, 5,316 prior
+summaries (0/1/2), 3,544 command summaries, 1,772 state/idle summaries and
+exactly one first-failure probe. All authored command/state count, byte and
+hash variants match earlier controls. Idle records confirm zero requested
+wait/readback=0, elapsed82..527ns. Only final sequence1769, origin(0,0), fails
+at(60,128), inside the active upper-left rectangle. Crop/horizontal and all
+prior snapshots are clean. Final EFB mismatch1, copy mismatch0; later
+rectangles preserve the bad pixel without new errors and client catches it
+at frame end. No other stage/prior mismatch or timeout/stall/kernel fault.
+
+The probe runs before final copy overwrites crop, and reports:
+
+```
+seq=1769 origin=0,0 x=60 y=128 active=1
+expected=f800 source=00ff0000 prior=5a5a snapshot=00bf0000
+texture=horizontal tx=60 ty=128 stride=512 cached=f800 refreshed=f800
+peek_ret=0 peek0=00bf0000 peek1=00bf0000 peek2=00bf0000
+```
+
+Thus the selected CPU-visible active texture is correct both before and
+after invalidation; the original source is correct. All three independent
+raw EFB peeks repeat the bad value, and the unchanged final EFB copy also
+reproduces it. This is stronger than a single snapshot mismatch. It weighs
+against a currently corrupted CPU-visible texture or a one-off EFB read,
+but does not exclude an earlier transient, GPU-internal texture/cache state,
+rendering pipeline issue, or EFB storage behavior. CPU cache invalidation
+does not inspect or invalidate GX's internal texture cache. Prior5a5a is
+expected for the first rectangle in the freshly reset frame, not a failure.
+
+The active-texture probe path is now hardware-exercised; the preserved-texture
+path remains covered only by host mapping tests. Next bounded evidence target:
+repeat the same module/client/settings for up to1,000 frames, stopping at
+first client failure, to capture another occurrence and, if outside the active
+rectangle, inspect the preserved texture. Do not keep extending runs past
+the agreed limit to force that outcome. Preserve these observations before
+changing GPU state or proposing a repair. Existing gx_setup_texture already
+emits GX texture-cache invalidation during final state setup; do not infer
+that simply adding the same command again is a demonstrated fix.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Download exited0 and decompressed SHA-256
+matches remote raw capture93ef93a4845bbc72c3e4704a7382cc353edb9d7700a5212ee9cc0e95d129fb08.
+No defaults/provider promotion; trace-free, Mesa and visual acceptance remain
+open. Evidence includes exact module/source, build/patch, host checks and
+probe-aware auditor. Manifest:
+
+```
+7fc5c212b67bb3463b77fad7551f73861b330e9a8fd1bdfb81761b04e328237e  /media/anolis/dev/wii-gcn-native-probe1000.sha256
+```
+
+
+#### Probe repeat: same location/bit also corrupts white (2026-09-09)
+
+Repeated exact41acc195... module and d1a9a55d... client with original colours
+and identical parameters on the same boot. Live sysfs verifies failure probe,
+splits/preservation/state fences and idle_us=0/idle_wait_only=1. Planned
+count=999, up to1,000 frames /4,000 sequences, first client failure stop.
+Failed frame354 (zero-based), after355 attempted frames /1,420 sequences;
+runner exit1. No source or binary changes for this repeat.
+
+Checksum-verified complete capture audits4,260 stage summaries,4,260 prior
+summaries(0/1/2),2,840 command summaries and1,420 state/idle summaries. Exactly
+one current-cycle probe; raw capture's earlier seq1769 probe is history from
+the previous run and excluded at the last connected marker. Idle records
+confirm requested_us=0/readback=0, elapsed98..527ns. All authored state/command
+count/byte/hash variants match prior controls. Only final sequence1420,
+origin(320,240), fails at(607,343), inside the active lower-right rectangle.
+Crop/horizontal and all prior snapshots are clean. Final efb_mismatches=1,
+copy_mismatches=0; no other stage/prior mismatch or timeout/stall/kernel fault.
+
+```
+seq=1420 origin=320,240 x=607 y=343 active=1
+expected=ffff source=00ffffff prior=5a5a snapshot=00dfffff
+texture=horizontal tx=287 ty=103 stride=512 cached=ffff refreshed=ffff
+peek_ret=0 peek0=00dfffff peek1=00dfffff peek2=00dfffff
+```
+
+Both CPU-visible texture reads are correct, and all three raw EFB peeks
+repeat the corrupted white value, which final copying also reproduces.
+The same absolute coordinate(607,343) lost the same raw red bit0x20 under
+the earlier red/white swap, then00df0000 versus00ff0000; now00dfffff versus
+00ffffff (RGB565 dfff versusffff). Therefore pure-red-only failure is rejected.
+The prior impression that errors simply follow red content was premature:
+at least one coordinate/bit recurs across red and white. This does not prove
+physical EFB failure or rule out GPU-internal texture/cache or rendering
+state. CPU cache invalidation is not inspection of GX's texture cache.
+
+The repeated probe again hit the active texture path; no hardware evidence
+for the outside/preserved probe branch was obtained. Do not keep extending
+runs just to force that branch. Next investigation should inspect the existing
+texture-free clear/direct-colour controls and design a bounded EFB write/read
+control that checks the known coordinates and a full-surface oracle without
+texture sampling. Verify clear scope, completion and expected image before
+running; ordinary textured-client expectations cannot be reused if the
+control changes output. Compare clear-only and texture-free primitive writes
+as appropriate to distinguish texture-dependent behavior from later stages.
+No such control is implemented/tested in this section. Preserve default-off
+diagnostics and the agreed1,000-iteration ceiling; no fix/provider promotion.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Download exited0; decompressed SHA-256
+matches remote raw capture1a11b8f9af0f494ef8505af01e6125e13b5ce59c653a2028be3921c51f50e337.
+Trace-free, Mesa and visual acceptance remain open. Evidence manifest:
+
+```
+b8a040d4d7084c18acf7014af042b208061503a51bd0b2fc3fcb4e9e97d8b015  /media/anolis/dev/wii-gcn-native-probe-repeat1000.sha256
+```
+
+
+#### Full-surface texture-free clear control passes (2026-09-09)
+
+Add default-off efb_clear_iterations (0 disables, maximum1000) and readonly
+efb_clear_result (initial -EAGAIN). Before accelerator callback registration,
+run under gx_submit_lock using the initialized private MEM1 copy workspace.
+For each iteration alternate red/white, initialize copy state in RGB8/Z24,
+set clear colour, issue full640x480 copy-clear and wait for PE finish. Discard
+that copy's old pixels. Read the entire raw EFB, then copy the cleared EFB to
+RGB565 without clearing, wait for PE finish and invalidate CPU destination
+cache. Check every raw RGB24 value (alpha ignored), every tiled RGB565 pixel,
+and agreement of copy with quantized raw snapshot. On first mismatch log its
+coordinate, both values and three subsequent EFB peeks, finish that iteration's
+counts, stop and return -EIO. Submission/allocation errors also fail. No
+primitive or texture-sampling command is issued by this test. This is a
+clear/copy control, not the normal rendering workload.
+
+Test runs before callbacks are registered, then accelerator registration
+proceeds only on success. On failure the probe tears down initialized GPU
+resources. A platform probe error need not make insmod fail; therefore the
+small result-check client explicitly reads module parameters and requires
+requested count and result0. Runner still unloads and restores CPU console.
+Result checker is tools/wii-gcn-efb-clear-result.sh. Source is default-off;
+normal clients and rendering paths retain their behavior.
+
+PowerPC W=1 build, strict checkpatch (zero errors/warnings/checks), and
+whitespace checks pass. Host stubs exercised1000 clean iterations and a
+synthetic white-pixel fault at iteration3, confirming whole-surface matching,
+three repeated peek coordinates and first-error stop. This does not validate
+hardware cache/MMIO semantics. Exact candidate SHA-256:
+90cdeb9bc2b0140c7a00d9e172d1221ba6f6f9de38618717ae1e7cda753a594c.
+Result-check script SHA-256:
+5a013c365a10c261c93551735e6c9b0c6e807e3537addfc8b417d749acdf6418.
+
+A four-iteration hardware validation first passed both red and white clears
+and both complete oracles, confirming clear scope/completion for this path.
+Then the exact same binary passed1000 iterations:500 red and500 white clears,
+307,200,000 checked pixels per oracle, zero raw/copy mismatches and zero
+copy-vs-EFB differences. Full kernel audit confirms ordered iterations0..999,
+expected alternating colours, result0/completed1000/requested1000, no first
+mismatch and no timeout/stall/kernel fault. Start-to-result109.306857 seconds.
+Runner and result checker exited0. This is1000 full-surface clear iterations,
+not1000 four-rectangle native frames; exposure time, state and operation mix
+are substantially different. Do not infer a failure-rate comparison or that
+EFB storage is proven reliable. It is a clean bounded clear-only observation.
+
+Next bounded control: extend the same harness with an opt-in texture-free
+primitive mode, first clearing to a contrasting black background (verify it),
+then drawing expected red/white across the full surface with direct vertex
+colour/GX_PASSCLR and no texture sampling. A contrasting baseline is required
+so missing primitives cannot pass by leaving an expected-colour clear behind.
+Fence primitive completion, then use the same full raw/copy oracles; validate
+a short run before the1000-iteration ceiling and stop at first mismatch.
+Inspect FIFO capacity and geometry/state before implementation. This mode is
+not implemented/tested here. It will distinguish clear-only behavior from
+rasterization without attributing any result to a specific hardware defect.
+
+Both runs restore CPU console; final cleanup confirms gcn_gx absent and
+collector stopped. Installed provider remains a2e7df8e... and boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Full1000 capture downloaded successfully
+and decompressed SHA matches56c0da0b019318d9da2375418b4d8b5448e843860792f84256ee077867325f2d;
+short capture SHA matchesf7653f908058caf888579bb58623caebe4d94ef54bd165f1dac091739f2a2604.
+No defaults/provider promotion; textured correctness, trace-free, Mesa and
+visual acceptance remain open. Evidence manifests:
+
+`c29d4c8a5bbd91d579d1b3934a8e61877d6cf77a87a4c24a76c586f34b96aa22  /media/anolis/dev/wii-gcn-efb-clear4.sha256`
+
+`53bdabdd80882ad84caeed7d576ff5cf7bf13bacde14c97ec071f5a1bf6259f5  /media/anolis/dev/wii-gcn-efb-clear1000.sha256`
+
+
+#### Texture-free primitive validation finds raw red LSB discrepancy (2026-09-09)
+
+Add default-off efb_primitive_test, requiring efb_clear_iterations1..1000.
+Extend the clear harness: clear full640x480 to black and verify every raw
+RGB24 pixel before drawing. Then use gx_setup_vertex_color_state (zero
+texgens, GX_PASSCLR, dithering disabled), full scissor and960 direct-colour
+quads (two320-wide quads per row for480 rows). Check FIFO capacity before
+emission:960*4*12 vertex bytes plus header/state/finish reserve. Fence draw
+completion, take full raw EFB snapshot, copy without clear, fence and compare
+both full-surface oracles. Alternate intended red/white across iterations.
+The verified contrasting background prevents absent draws from passing.
+Start log records primitive=1; each iteration logs background mismatch count,
+primitive bytes/hash and final counts. Result-check client additionally
+requires efb_primitive_test=Y. Clear-only mode remains available unchanged.
+
+PowerPC W=1 build, strict checkpatch (zero errors/warnings/checks), and
+git diff --check pass. Host GPU/cache stubs exercise clear regression,
+primitive geometry/quad coverage, four primitive iterations, and rejection
+when primitive writes are intentionally omitted. They do not validate actual
+rasterization/MMIO behavior. Candidate SHA-256:
+e2f60a5caa9b72e3888bb8220bd780b303493f3cc187a23f312a1455f3fdd0ee.
+Result checker tools/wii-gcn-efb-primitive-result.sh SHA-256:
+438242dd25883464850ee7956d5aafdf56bf552da580762e612724150dc9ea96.
+
+Short hardware validation requested4 iterations, but correctly stopped at
+iteration0: one attempted red draw, zero successfully completed iterations,
+result=-EIO(-5), runner/result-check exit1. Black background check passes all
+307,200 pixels. Primitive submission is960 quads,46,468 authored bytes,
+hash eb9ee45e. Exactly one raw RGB24 pixel differs:
+
+```
+iteration=0 x=274 y=306 expected=00ff0000 raw=00fe0000
+expected565=f800 copy=f800 peek_ret=0
+peek0=00fe0000 peek1=00fe0000 peek2=00fe0000
+```
+
+Full audit confirms one raw EFB mismatch, zero RGB565 copy mismatches, zero
+copy-vs-quantized-EFB differences, and no timeout/stall/kernel fault. All
+three repeated raw reads preserve the red LSB deficit. RGB565 conversion
+discards this bit, so the copy oracle alone cannot detect it. No texture
+sampling occurs in this control, establishing a raw discrepancy without it;
+this does not yet establish the same mechanism as earlier larger RGB565-visible
+red deficits. Do not silently relax the RGB24 oracle, call this a full pass,
+or infer physical EFB failure. The previous1000 clear-only pass used a
+previous binary and a different operation mix; no comparative rate follows.
+
+The1000-iteration primitive run was not started because short validation
+failed at its first error; white drawing has not yet been hardware-validated
+in this harness. Next bounded step: repeat the same exact four-iteration
+primitive validation, retain first-error stopping and raw/copy oracles, and
+compare location, bit and command hash. If red passes, validate white too;
+if it fails again, investigate repeatability and primitive colour precision
+before authorizing a longer diagnostic by treating the short run as passed.
+The1000-iteration ceiling remains, and no defaults/provider are promoted.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Installed provider remains a2e7df8e...; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Download exited0; decompressed SHA-256
+matches22ea62d253ec8dcedc9504b02bb045369fcb48799f5617640c1ba9ed15be3adf.
+Complete capture is trimmed at the current connected marker; earlier clear-only
+records in raw history are excluded. Evidence includes exact module/source,
+build/patch, host checks, checker and primitive-aware audit. Manifest:
+
+`0ea81abdaeaa7de322aa8dd6516a8463899fdd56a153e476e86fdd2e61686fc2  /media/anolis/dev/wii-gcn-efb-primitive4.sha256`
+
+#### Exact-binary primitive repeat finds RGB565-visible corruption (2026-09-09)
+
+Repeat the four-iteration primitive validation with the unchanged archived
+module e2f60a5caa9b72e3888bb8220bd780b303493f3cc187a23f312a1455f3fdd0ee
+and checker 438242dd25883464850ee7956d5aafdf56bf552da580762e612724150dc9ea96.
+Arguments: efb_clear_iterations=4 efb_primitive_test=1; checker argument4.
+The run again stops at iteration0, result=-5, completed=0, requested=4,
+runner exit1. One red draw was attempted; white was not reached. The black
+background passes all307,200 pixels. The primitive command record matches
+exactly:960 quads,46,468 authored bytes, hash eb9ee45e.
+
+This time the full-surface audit finds three raw RGB24 mismatches and two
+RGB565 copy mismatches, with zero copy-vs-quantized-EFB differences. Only
+the first mismatch is located in the log:
+
+```
+iteration=0 x=601 y=300 expected=00ff0000 raw=007f0000
+expected565=f800 copy=7800 peek_ret=0
+peek0=007f0000 peek1=007f0000 peek2=007f0000
+```
+
+Red's high bit is missing at this pixel, all three repeated reads agree,
+and the copy faithfully reproduces the reduced value. The other two raw
+mismatch coordinates/values are not logged. Unlike the first primitive
+run's red LSB discrepancy, this repeat establishes RGB565-visible corruption
+in a texture-free direct-colour draw. It does not establish the same root
+mechanism as native textured failures or prove a physical hardware defect.
+Both short runs failed on their first draw, so do not start the1000-iteration
+primitive run or treat white drawing as validated. No rate estimate follows.
+
+Next bounded control: run four clear-only iterations with this exact e2f...
+binary, efb_primitive_test=0 and the clear-only result checker. The earlier
+1000 clear-only pass used the preceding binary. If the same-binary clear
+control passes, investigate primitive state/batching with short tests before
+longer exposure. Retain the raw oracle and stop at the first discrepancy.
+
+Audit confirms no timeout/stall/kernel fault. Cleanup confirms CPU console
+restored, gcn_gx absent and collector stopped. Installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09
+and boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1. No source/default/provider
+changes in this repeat. Download completes successfully and decompressed
+capture SHA-256 matches
+ dd9b7733246357cc85814655e15ebcd8908fb915b16a4bb3837d5377eaa55b35.
+The audit trims history at the last connected marker. Evidence includes
+preflight, client/cleanup logs, full capture, audit and prior/repeat comparison.
+Exact module/source remain archived under the preceding primitive4 prefix.
+Manifest:
+
+`f6d72d58a34260feee71f3965b3b60484c0a8bc3f5f8ef408498c725258409d6  /media/anolis/dev/wii-gcn-efb-primitive-repeat4.sha256`
+
+#### Same-binary four-iteration clear control passes (2026-09-09)
+
+Run the exact primitive-test binary
+ e2f60a5caa9b72e3888bb8220bd780b303493f3cc187a23f312a1455f3fdd0ee
+with efb_clear_iterations=4 efb_primitive_test=0 and the clear-only checker
+(argument4, SHA5a013c365a10c261c93551735e6c9b0c6e807e3537addfc8b417d749acdf6418).
+Checksum-verified remote reuse; no driver source changes. Runner exits0,
+checker reports requested4/result0/PASS. Full capture audit confirms
+primitive=0, ordered iterations0..3, two red and two white clears,
+result0/completed4/requested4. All1,228,800 checked pixels per oracle pass:
+zero raw EFB mismatches, RGB565 copy mismatches or copy-vs-EFB differences.
+No first mismatch, primitive draw record, timeout/stall or kernel fault.
+Start-to-result is0.436164 seconds; this is four clear iterations, not native
+four-rectangle frames or a long reliability run.
+
+The same binary now has a clean short clear-only control and two primitive
+runs failing on their first red draw. This removes the different-binary
+confound for this short comparison but does not establish a failure rate or
+physical cause. Next bounded diagnostic: add an opt-in single full-screen
+quad variant, preserving direct-colour state, verified black background,
+completion fences and full raw/copy oracles. Validate FIFO/geometry and run
+four iterations with first-error stopping. Compare against the existing
+960-quad path; keep the1000 ceiling deferred until short validation passes.
+This proposed variant is not implemented or hardware-tested in this entry.
+
+CPU console restored; gcn_gx absent; collector PID18503 stopped and its SSH
+session ended. Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1 and installed
+provider remainsa2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Capture download completes with decompressed SHA-256
+ efb7435fe2d3ab033e684c246447c04d175592cbbb0dbe473f63e573406491ba.
+Audit excludes earlier history using the last connected marker. No defaults
+or installed provider changes. Evidence manifest:
+
+`f05a0c9b4920c3c36ece77e89ac633ca7173baad2187e524da737f04223ce0f7  /media/anolis/dev/wii-gcn-efb-clear-samebinary4.sha256`
+
+#### Single-quad primitive validation passes four iterations (2026-09-09)
+
+Add default-off efb_primitive_single_quad, requiring efb_primitive_test and
+therefore a nonzero1..1000 iteration count. Emit one direct-colour full-screen
+quad from(0,0) to(640,480) instead of960 split-row quads. Keep the verified
+black background, vertex-colour state, scissor, completion fences and full
+raw/copy oracles unchanged. FIFO capacity reserve now uses the selected quad
+count; log the actual count. Checker optional second argument single requires
+the single-quad module parameter to beY. Existing split mode remains default.
+
+PowerPC W=1 build and strict checkpatch pass (zero errors/warnings/checks).
+Host stub checks cover clear regression, split-row and single-quad geometry,
+four alternating-colour draws and rejection of intentionally omitted draws.
+A signed fifo_pos host stub initially failed strict compilation; correcting
+it to match the driver's unsigned type passes. These are GPU/cache stubs,
+not hardware behavior validation. Shell syntax and git diff --check pass.
+Module SHA-256:
+095fe47c6711f3af6ab06fcebd5198e9fc17ceabc59a9acb8517aa7e70c9dc26.
+Checker SHA-256:
+b9a6b60e94aa9143227ffe4842b6200de71e850e47620953a13fb248f2b4e952.
+
+Run efb_clear_iterations=4 efb_primitive_test=1 efb_primitive_single_quad=1
+with checker arguments '4 single'. Hardware passes all four iterations:
+two red and two white draws, all four black backgrounds clean,1,228,800 pixels
+per output oracle with zero raw/copy mismatches and zero copy-vs-EFB
+differences. One quad per iteration;436 authored bytes each, red command hash
+78b5821f and white88a1e3ab, each repeated identically. Audit confirms ordered
+iterations0..3, result0/completed4/requested4, no first mismatch or kernel
+fault/timeout/stall. Start-to-result0.872392 seconds. Runner/checker exit0.
+This validates short red/white single-quad behavior, not sustained reliability.
+
+The clean single-quad result differs from both immediate960-quad failures.
+Geometry, primitive count and command length changed together; do not yet
+attribute the result specifically to FIFO pressure, rasterization, precision
+or hardware. Next bounded control: run four split-row iterations with this
+same095f... binary and efb_primitive_single_quad=0, retaining first-error
+stopping. Compare its command hash with prior eb9ee45e for red. This checks
+that the short failure persists in the new binary before extending exposure
+or further isolating batching/geometry. No1000-iteration run was started.
+
+Cleanup confirms CPU console restored, gcn_gx absent and collector stopped.
+Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0 and decompressed full capture SHA-256 matches
+ f98056b0c2d476451713678035dbe6c854ab1e25894d5158df4991f210b1a864.
+Audit trims history at the last connected marker. Exact module/source/checker,
+incremental patch, build/host/style checks, capture and audit are archived.
+No default/provider promotion. Manifest:
+
+`74943dc9314d192fb00313ee9d6dede18f1079ff845ee49481980459ad521748  /media/anolis/dev/wii-gcn-efb-single4.sha256`
+
+#### Same-binary split-row primitive control fails immediately (2026-09-09)
+
+Reuse exact module095fe47c6711f3af6ab06fcebd5198e9fc17ceabc59a9acb8517aa7e70c9dc26
+and checkerb9a6b60e94aa9143227ffe4842b6200de71e850e47620953a13fb248f2b4e952
+from the four-pass single-quad test. Arguments: efb_clear_iterations=4
+ efb_primitive_test=1 efb_primitive_single_quad=0; checker argument4.
+No driver/checker changes. The four-iteration test stops on its first red
+draw, ret=-5, completed0/requested4, runner exit1. White is not reached.
+Verified black background is clean across307,200 pixels. Draw command record
+matches earlier split runs exactly:960 quads,46,468 bytes, hash eb9ee45e.
+
+```
+iteration=0 x=72 y=268 expected=00ff0000 raw=00fd0000
+expected565=f800 copy=f800 peek_ret=0
+peek0=00fd0000 peek1=00fd0000 peek2=00fd0000
+```
+
+Audit finds exactly one raw RGB24 mismatch, zero RGB565 copy mismatches and
+zero copy-vs-quantized-EFB differences. Red bit0x02 is absent and all three
+repeat reads agree; RGB565 discards that bit. No timeout/stall/kernel fault.
+This is now a same-binary short comparison: single full-screen quad passes
+four alternating red/white iterations, split rows fail immediately. Three
+split-row runs have now failed on their first red draw, at different pixels
+and red bits; the previous repeat included RGB565-visible errors. This does
+not establish a stable failure rate, specific FIFO fault or physical defect.
+The raw oracle remains required. No1000-iteration run was started.
+
+Next bounded diagnostic: two full-height320x480 side-by-side quads. This
+retains the320-pixel width and centre seam of split rows while removing
+one-row-high geometry and reducing primitive count/command length. Preserve
+colour state, contrasting-background verification, fences and full oracles;
+validate geometry/build, then four iterations with first-error stopping.
+Count, height and command length still change together, so interpret it as
+another isolation step, not a unique causal test. This variant is not yet
+implemented. Keep defaults and installed provider unchanged.
+
+Cleanup confirms CPU console restored, gcn_gx absent and collector stopped.
+Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0; decompressed full capture SHA-256 matches
+ 3e768375d1800cf4deafb9caee9ccfe03cac5ac20f44c7cb413caa2fcafbb331.
+Audit excludes historical records at the last connected marker. Archive
+includes preflight, client/cleanup, full capture, auditor and same-binary
+comparison; exact module/source remain in the single4 archive. After local
+checksum verification, compress the single4, clear-samebinary4 and current
+split-samebinary4 logs on-device; gzip integrity checks pass and available
+/tmp space recovers from288K to3.2M. No evidence discarded. Manifest:
+
+`9f1a4bfb4aa5cc1ff9929ade237687ee1cf126644ed5222d72e0debc2c302116  /media/anolis/dev/wii-gcn-efb-split-samebinary4.sha256`
+
+#### Two full-height quads pass short primitive validation (2026-09-09)
+
+Add default-off efb_primitive_two_quads, requiring efb_primitive_test and
+excluding efb_primitive_single_quad. Invalid combinations fail before GPU
+initialization. The primitive harness selects two quads spanning(0,0)..(320,480)
+and(320,0)..(640,480), retaining the320-pixel width and centre seam of the
+split-row path. Keep verified black background, vertex-colour state, scissor,
+completion fences, FIFO capacity reserve and full raw/copy oracles. Single
+and split-row defaults retain their geometry. Checker second argument two
+requires the new parameterY; split now requires both geometry flagsN and
+unknown mode arguments fail. The updated split checker requires this new
+binary; use archived checkers for older modules without the new parameter.
+
+PowerPC W=1 build, strict host build/checks, strict checkpatch (zero errors,
+warnings and checks), shell syntax and git diff --check pass. Host GPU/cache
+stubs verify clear regression, all three geometry variants, four alternating
+iterations, exact left/right coverage for the two-quad case, and omitted-draw
+rejection. They do not simulate hardware rasterization or MMIO. Candidate
+module SHA-256:
+82c6e02893014393d5c7e8644ae7e80f9cc00555615e41af13fdd62eca26b363.
+Checker SHA-256:
+c2c960cb2dd934f6b69e221eb72d33189ad5b6d74cb9e8cb0c10032a82710e66.
+
+Hardware arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_two_quads=1; checker arguments '4 two'. Runner and checker
+exit0. All four iterations pass: two red and two white draws, four clean
+black backgrounds,1,228,800 pixels per output oracle, zero raw/copy mismatches
+and zero copy-vs-EFB differences. Audit confirms ordered iterations0..3,
+ret0/completed4/requested4 and no first error, timeout/stall or kernel fault.
+Each draw has two quads and484 authored bytes. Red hash4bbe2767 and white
+hashbaefb867 each repeat identically. Start-to-result0.844427 seconds.
+
+This short control shows320-pixel-wide, full-height geometry and the centre
+seam can render correctly. It does not validate sustained reliability or
+uniquely distinguish strip height, primitive count, command length or timing.
+The new binary has not yet repeated the failing split-row control. Next
+bounded diagnostic: preserve all960 one-row-high quads but submit them in
+16-row batches (32 quads each,30 submissions), with completion fencing per
+batch and the same background and final oracles. Validate emission/capacity,
+then run four iterations with first-error stopping. Include a short unbatched
+control in the resulting binary for comparison. This separates geometry from
+submission size/cadence, although completion waits also change timing. This
+batch mode is not implemented or hardware-tested in this entry. No1000 run
+was started; no defaults/provider promotion.
+
+Cleanup confirms CPU console restored, gcn_gx absent and collector stopped.
+Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1 and installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Capture download exits0 and decompressed SHA-256 matches
+ 861e8c54f09879854568e6218aa2ba2a7b24a8658f2bd886ecac9be4c9df0b4f.
+Full audit excludes older history at the last connected marker. Archive
+contains exact module/source/checker, incremental patch, build/host/style
+checks, preflight/client/cleanup, full capture and audit. Manifest:
+
+`4ca5e7a613fdacd2ed674df78945f86ce31bf9236022971fbac555bbe60c7332  /media/anolis/dev/wii-gcn-efb-two4.sha256`
+
+#### Fenced 16-row batches fail; unbatched control exposes green deficit (2026-09-10)
+
+Add default-off efb_primitive_batch, requiring primitive test and excluding
+single/two-quad modes. Preserve all960 split-row quads and their order, but
+emit32 quads per16-row batch,30 batches per full surface. Set colour/scissor
+state once before the first batch; append BP0x45000002 and wait for PE finish
+after each batch before resetting CPU FIFO position. Keep GPU state across
+batches. Background verification and full raw/copy oracles remain before and
+after the complete draw; no intermediate EFB snapshots. Per-batch logs record
+iteration, batch, row bounds, quad count, bytes and hash. Capacity checks apply
+to each submission. With batching disabled, original command bytes/hashes
+remain unchanged. Checker mode batch requires the flagY; split requiresN.
+The updated split checker requires this binary's parameter, so use archived
+checkers for older builds.
+
+PowerPC W=1 build and host checks pass. Host GPU/cache stubs verify all prior
+geometry modes, exact batch row ordering/coverage and120 draw completion
+calls over four batched iterations, plus omitted-draw rejection. Two style
+warnings were fixed by wrapping lines; final strict checkpatch reports zero
+errors/warnings/checks. Shell syntax and git diff --check pass. Host source
+archive predates only those whitespace changes. Module SHA-256:
+c2c0f574c80463618b29945fb50628aa5e8cb5a95fb7cba09b4cbab3c564b980.
+Checker SHA-256:
+73c62ccbb7cdfbc1f0743f8b5c6091239bea3edb12a3021ea9740ef0482ae821.
+
+Batched hardware arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_batch=1, checker '4 batch'. Black background passes. All30
+ordered batches complete for iteration0, rows0..479,32 quads each; first
+submission1924 authored bytes, later submissions1544 bytes. Final red draw
+fails with one raw mismatch and one RGB565 copy mismatch, no copy-vs-EFB
+difference. Result=-5, completed0/requested4, one attempted red iteration,
+runner exit1. White not reached.
+
+```
+x=349 y=448 expected=00ff0000 raw=00f70000
+expected565=f800 copy=f000 peek_ret=0
+peek0=00f70000 peek1=00f70000 peek2=00f70000
+```
+
+Red bit0x08 is absent. Three repeated reads agree and the copy faithfully
+reproduces the reduced value. Smaller submissions and completion waits do
+not eliminate this corruption. This does not prove timing irrelevant or
+rule out every command-transport problem; it rejects this batching change
+as a correctness fix.
+
+Then reuse the same exact binary/checker for unbatched control, count4,
+ efb_primitive_batch=0, checker '4 split'. Red iteration0 passes, then white
+iteration1 fails; result=-5, completed1/requested4, two attempted iterations,
+runner exit1. Both verified black backgrounds are clean. Both draws use960
+quads and46,468 bytes; red hash eb9ee45e matches prior runs, white5347625e.
+Exactly one raw and one RGB565 mismatch, zero copy-vs-EFB differences:
+
+```
+x=302 y=54 expected=00ffffff raw=00fffbff
+expected565=ffff copy=ffdf peek_ret=0
+peek0=00fffbff peek1=00fffbff peek2=00fffbff
+```
+
+This is a green-channel bit0x04 deficit, confirmed by three raw reads and
+RGB565 output. Corruption is not confined to red-channel bits, and this
+unbatched run did not fail on its first red draw. Do not describe all strip
+runs as deterministically failing red iteration0 or infer physical EFB
+failure. Both same-binary modes have now failed their short validation.
+No1000-iteration run was started and no defaults/provider were promoted.
+
+Next bounded geometry diagnostic: full-width640x1 strips, still in16-row
+batches and with the same background/state/fences/oracles. This retains
+one-row height and30 completion intervals, removes the centre seam and halves
+quad count/command length. Validate coverage/capacity and run four iterations
+with first-error stopping; it still changes multiple related factors and is
+not a unique causal test. This variant is not implemented here.
+
+Both captures pass full audits: ordered completed draw records, clean
+backgrounds and no timeout/stall/kernel fault. Both runners restore CPU
+console; cleanup confirms gcn_gx absent and collectors stopped. Boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Downloads exit0; decompressed hashes match:
+
+```
+bc80051a81684f13810b9c1d4fe561f582e2ad035130703568dcc042ca3a6ce1  batch4
+ce725dc53e6f824712d624bb7f3ea08a7a5aece6ed793bddd87d0998de4808a1  batch-control4
+```
+
+Audits trim old history at the last connected marker. Completed on-device
+logs are compressed only after local checksum verification; gzip integrity
+checks pass. Archives include exact module/source/checker, incremental patch,
+build/host/style checks, captures, audits and same-binary comparison.
+Manifests:
+
+`a52721a8d1b0b92ed6cbce7fa0383c13f6e6fb849e5359194e5dd16846d1cff9  /media/anolis/dev/wii-gcn-efb-batch4.sha256`
+
+`ee2eb33984881c2f3112dbadaae45c0c9561f852e8bc01b24c9a38b315b41d77  /media/anolis/dev/wii-gcn-efb-batch-control4.sha256`
+
+#### Full-width one-row strips expose blue-channel corruption (2026-09-10)
+
+Add default-off efb_primitive_full_width, requiring efb_primitive_batch (which
+requires primitive test and excludes single/two-quad modes). Emit one640x1
+quad per row,16 quads per batch,30 batches per surface. Retain one-row height,
+row order, state setup,16-row completion cadence, black-background check and
+full raw/copy oracles. Remove the centre seam and halve primitive count and
+vertex bytes relative to batched split rows. Checker mode full requires the
+new flagY; batch now requiresN. Updated batch checker requires this module's
+new parameter; archived checkers remain needed for older builds.
+
+PowerPC W=1 build, strict host checks, strict checkpatch (zero errors/warnings/
+checks), shell syntax and git diff --check pass. Host GPU/cache stubs cover
+all previous geometry modes plus exact full-width row coverage/order and120
+completion calls over four iterations; omitted draws remain rejected. These
+checks do not validate hardware rasterization or MMIO. Candidate module:
+54e581cff5d64a431ea8f99e506f5b3c60d7e99de62db0b1c9bdaeadada3beb2.
+Checker SHA-256:
+470e23545fa318d938f5b33aeaf82403eb26b134588956b85730f90681f7a5ea.
+
+Hardware arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_batch=1 efb_primitive_full_width=1; checker '4 full'.
+Red iteration0 passes; white iteration1 fails. Result=-5, completed1/requested4,
+two attempted iterations, runner exit1. Audit confirms both black backgrounds
+clean and all60 ordered batches complete, covering rows0..479 once per
+iteration. Each batch contains16 quads; first batch1156 authored bytes, later
+batches776 bytes. Across614,400 pixels per output oracle there is exactly one
+raw mismatch and one RGB565 copy mismatch, zero copy-vs-EFB differences:
+
+```
+iteration=1 x=605 y=308 expected=00ffffff raw=00ffffdf
+expected565=ffff copy=fffb peek_ret=0
+peek0=00ffffdf peek1=00ffffdf peek2=00ffffdf
+```
+
+Blue bit0x20 is absent; all three repeated reads agree and the copy faithfully
+reproduces it. Combined with prior red deficits and the unbatched control's
+green deficit, observed primitive corruption now spans all three RGB channels.
+Removing the centre seam does not prevent it, so that seam is not required
+for this failure. No unique physical or pipeline cause follows. Full-height
+quad controls had only short clean exposure; they are not proven reliable.
+No1000-iteration run was started and the raw oracle remains unchanged.
+
+Next bounded diagnostic: coalesce each16-row batch into one640x16 band while
+retaining the same30 completion intervals and state/background/oracles. This
+changes strip height and primitive count together but holds full-width
+coverage and batch cadence. Validate exact coverage and run four iterations
+with first-error stopping; include a same-binary one-row-strip control for
+comparison. This band variant is not implemented or tested in this entry.
+
+Audit finds no timeout/stall/kernel fault. CPU console restored, gcn_gx absent,
+collector stopped. Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1 and installed
+provider remainsa2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0; decompressed full capture SHA-256 matches
+274e90a2ca731c9c869874a4f8a9669a871bb52a8e4b365529877cd18cc1b5f5.
+Audit trims older history at the last connected marker. The verified remote
+capture is compressed and gzip integrity check passes. Archive includes exact
+module/source/checker, incremental patch, build/host/style checks, complete
+capture and audit. Defaults and installed provider unchanged. Manifest:
+
+`eefb03d9db0d2fb84b57391c300c960f1a161b390213663d9618adfb83e4d4d8  /media/anolis/dev/wii-gcn-efb-full4.sha256`
+
+#### Sixteen-row bands pass; same-binary one-row control fails (2026-09-10)
+
+Add default-off efb_primitive_bands, requiring efb_primitive_full_width and
+its existing batched primitive prerequisites. Coalesce each16-row batch
+into one640x16 quad while retaining30 completion intervals, state setup,
+verified black background and full raw/copy oracles. Other modes keep their
+geometry. Checker mode bands requires the new flagY; full now requiresN,
+so use archived checkers with older modules lacking the parameter.
+
+PowerPC W=1 build, strict host checks, strict checkpatch (zero errors/warnings/
+checks), shell syntax and git diff --check pass. Host GPU/cache stubs verify
+all prior geometry plus exact band coverage/order,120 quads and120 completion
+calls across four band iterations, and omitted-draw rejection. No hardware
+rasterization/MMIO behavior is implied by stubs. Exact module SHA-256:
+3e5dc9fa7e272a7c3fb64f815d93ccbbb450a9f6cde7e291ad03097417a4cefa.
+Checker SHA-256:
+58ff26a47daaef7fdb9e1071df1f4474e009d9fd7b4884a258836ae53981764d.
+
+Band run arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_batch=1 efb_primitive_full_width=1 efb_primitive_bands=1;
+checker '4 bands'. All four iterations pass (two red, two white), with four
+clean black backgrounds and all120 ordered batches complete. Each batch is
+one quad, first submission436 authored bytes, subsequent submissions56 bytes.
+All1,228,800 pixels per output oracle pass, zero raw/copy mismatches and zero
+copy-vs-EFB differences. Result0/completed4/requested4; runner/checker exit0.
+
+Reuse the exact binary/checker for one-row control, changing bands=0 and
+checker '4 full'. Red iteration0 passes, white iteration1 fails; result=-5,
+completed1/requested4, runner exit1. Both backgrounds clean; all60 batches
+complete,16 quads per batch,1156 first/776 subsequent authored bytes. The
+complete command-record sequence matches the preceding full4 run exactly.
+Three raw RGB24 pixels differ, one is RGB565-visible; zero copy-vs-EFB
+differences. Only the first mismatch is located/logged:
+
+```
+iteration=1 x=305 y=176 expected=00ffffff raw=00fffffb
+expected565=ffff copy=ffff peek_ret=0
+peek0=00fffffb peek1=00fffffb peek2=00fffffb
+```
+
+At this first pixel blue bit0x04 is absent; all repeat reads agree. RGB565
+discards this bit. The coordinates/channel/bit of the separate visible error
+are not logged, so do not invent them or attribute all three errors to blue.
+Same-binary comparison strengthens the short observed difference between
+one-row strips and16-row bands, but height and primitive count/command length
+change together; completion intervals match, actual elapsed timing need not.
+Four clean iterations do not establish band reliability or a physical cause.
+
+Next bounded step: longer validation of this exact band binary, capped at
+1000 iterations, with raw/copy oracles and first-error stopping unchanged.
+Short band validation now passes. Plan for30,000 batch records if all1000
+iterations complete: inspect free device storage and preserve/compress prior
+verified captures before starting a collector; do not allow log exhaustion
+or missing records to masquerade as a pass. No longer run was started here.
+These are clear/draw iterations, not native four-rectangle frame sequences.
+No defaults or installed provider changes; no proposed production fix yet.
+
+Both full audits confirm ordered records and no timeout/stall/kernel fault.
+CPU console restored, gcn_gx absent, both collectors stopped. Boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Capture downloads exit0; decompressed hashes match:
+
+```
+e3bcda7363fde3c3aaae1c2ea98d1e8f8a13b44740e4fe4df2d94163886e8701  bands4
+1a701cbb59ffe256c1c213c59581534b23d9772ffba5222b6290d539ed5d0940  bands-control4
+```
+
+Audits trim old history at the last connected marker. Both verified remote
+captures are compressed and gzip integrity checks pass. Archives contain
+exact module/source/checker, incremental patch, build/host/style checks,
+complete captures, audits and same-binary/prior-command comparison. Manifests:
+
+`a3af2bb2b63d8c4a821eeb4f7c905b82267e6f8e74bdb34c99e3248ea3b38d47  /media/anolis/dev/wii-gcn-efb-bands4.sha256`
+
+`1925cd53e916b0937a4cab7407815fa16c4f9784ab011b95eb7ed5af59160352  /media/anolis/dev/wii-gcn-efb-bands-control4.sha256`
+
+#### Band validation passes1000; post-test console notice delays completion (2026-09-10)
+
+Run the exact band4 module3e5dc9fa7e272a7c3fb64f815d93ccbbb450a9f6cde7e291ad03097417a4cefa
+and checker58ff26a47daaef7fdb9e1071df1f4474e009d9fd7b4884a258836ae53981764d
+with checksum-matched remote reuse. Arguments: efb_clear_iterations=1000
+ efb_primitive_test=1 efb_primitive_batch=1 efb_primitive_full_width=1
+ efb_primitive_bands=1; checker '1000 bands'. No source/default changes.
+Before capture, compress five completed clear/primitive/two-quad logs and
+verify gzip integrity, increasing available /tmp space from1.6M to6.5M.
+Keep full ordered capture and stop on first pixel error, up to1000 iterations.
+
+All1000 iterations pass:500 red and500 white,1000 verified black backgrounds,
+30,000 ordered band submissions. Full audit checks geometry, row bounds,
+quad count, submission sizes and every command hash against corresponding
+red/white band4 reference records. All307,200,000 pixels per output oracle
+pass, with zero raw EFB mismatches, RGB565 copy mismatches or copy-vs-EFB
+differences. No first mismatch or logged timeout/stall/Oops/BUG/Call Trace.
+Driver result0/completed1000/requested1000; checker PASS and runner exit0.
+Start-to-result426.456228 seconds (about7.1 minutes). These are1000 full-surface
+band draw iterations, not1000 native four-rectangle frames. This is a clean
+bounded observation; it does not prove band reliability or fix native drawing.
+
+Post-test console behavior is a separate unresolved observation. Driver
+finished at308715.953892. Runner logged 'running hardware test' at308717.106606,
+but TEST PASSED arrived only at308926.007542 (208.900936 seconds later), and
+CPU console restoration at308929.072635. During the delay, remote ps showed
+PID23121 in Ds state, bash executing remote_notice, whose commands write the
+message to /dev/kmsg and then /dev/tty0. This points to the console/status
+write path, but no blocked stack was captured. It is not a pixel-test failure
+and is not proof of a particular GPU or locking cause.
+
+An attempted stack/direct-check/manual-unload diagnostic arrived after the
+runner had already completed normally: PID no longer existed, module sysfs
+parameters were absent and rmmod reported module not loaded. Those late
+per-action checks returned1 and performed no recovery. Original checker
+passed and runner automatically unloaded. Do not claim manual recovery or
+omit this delay when reporting overall behavior. Exact late diagnostic output
+and observed process state are archived.
+
+Next work: inspect runner console-notice and accelerated console/locking paths
+before another long run; arrange read-only blocked-stack capture if the delay
+recurs. Preserve the successful band baseline while investigating how strip
+geometry differs. The native textured corruption and production acceptance
+remain open; no additional reliability run or provider promotion is justified
+merely by this pass. The user-selected1000 ceiling has been reached exactly.
+
+Capture collector stopped; gcn_gx absent, CPU console restored; boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider unchanged at
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Full download exits0 and decompressed SHA-256 matches
+ abd4780fe0b93bcdf7e3db1666124c1930d458d6876c2e99bd43bcf495735747.
+Audit trims prior history at the last connected marker; positions are indexed
+for efficient30,000-record validation. An initial tuple/list comparison
+mistakenly rejected identical reference records; normalized types and full
+rerun passes. Verified on-device capture compressed and gzip integrity passes.
+Archive includes preflight/storage, run/client/cleanup, full capture, auditor,
+summary and console observation; exact module/source remain in band4 archive.
+Manifest:
+
+`f159731438b6047a87e1474c349489a40a9229503d72cb568eef0e7261b8047b  /media/anolis/dev/wii-gcn-efb-bands1000.sha256`
+
+#### Console-delay source review and bounded stack watcher (2026-09-10)
+
+Review the208.9-second post-band-test notice delay without rerunning the
+1000-iteration workload. tools/wii-gcn-render-cycle.sh remote_notice writes
+/dev/kmsg first, then /dev/tty0 synchronously in the same remote shell; the
+checker is invoked only after that shell returns. Cleanup also emits a
+notice before rmmod, so a delayed console write can delay cleanup as well.
+The kernel-log marker alone does not prove the corresponding tty write
+returned. Prior observed Ds shell state is consistent with such a wait but
+is not a captured stack or unique causal diagnosis.
+
+Source paths: drivers/tty/vt/vt.c do_con_write acquires console_lock before
+processing output; kernel/printk/printk.c console_lock takes console_sem.
+DRM fbdev uses deferred damage work (drm_fbdev_shmem.c, drm_fb_helper.c), so
+console writes need not map directly to synchronous GX drawing. The GCN DRM
+provider has gcn_drm_accel_lock and GX submissions use gx_submit_lock; the
+self-test releases its submission lock before provider registration. The
+normal PE completion helper waits up to50ms per call. These facts alone do
+not explain a209-second notice delay or establish a lock inversion. Do not
+change rendering defaults or claim a console deadlock fix from this review.
+
+Add tools/wii-gcn-console-watch.sh, standalone and read-only apart from its
+stdout/stderr. It polls every two seconds for D-state bash/sh processes whose
+cmdline contains gcn-render-cycle:, captures status/wchan/kernel stack plus
+process inventory and up to32 other blocked tasks, and exits after three
+snapshots or the requested observation window. Default120 seconds, accepted
+range1..3600; optional explicit PID permits capability checks. This is a
+polling window, not a hard timeout for arbitrary kernel /proc reads. It sends
+no signals, touches no GPU/MMIO, writes no kernel/tty messages and does not
+change runner behavior. Automatic matching can miss short waits, other shell
+names or waits outside the notice path. Do not direct output to a console.
+
+Shell syntax and git diff --check pass. Host smoke check has zero captures
+when no matching task exists; simulated D-state ps fixture with real /proc
+reads validates automatic notice matching and one capture. Invalid duration,
+PID and extra-argument cases return2. Device explicit-PID one-second check
+captures one normal sleeping process with wchan do_wait and a readable stack
+(do_wait/kernel_wait4/system_call_exception/transfer_to_syscall), confirming
+stack access on this kernel. This is a capability test, not a reproduction of
+the delayed console write. Both watcher checks exited; none remains active.
+Script installed only at /tmp/wii-gcn-console-watch.sh, SHA-256:
+24d4332c4e6da44870f3d0475e4a0e1521c92d4325e6f5e2db4762f12a099cf2.
+
+Next bounded reproduction: start the watcher before a short four-iteration
+band/control cycle, with stdout/stderr redirected to a regular /tmp evidence
+file. For example on-device:
+
+```
+nohup /tmp/wii-gcn-console-watch.sh 120 > /tmp/gcn-console-watch-next.txt 2>&1 < /dev/null &
+```
+
+Record PID, wait for bounded completion, download/checksum evidence, and
+correlate any snapshots with runner notices. If a later long run is justified,
+choose a window covering it (up to3600 seconds) and capture stacks while the
+wait is present. Do not repeat1000 merely to compensate for missing previous
+stacks. No new GPU run, driver/module build, provider install or kernel changes
+in this step. The clean1000-band baseline and unresolved strip corruption
+remain as previously recorded. Evidence manifest:
+
+`b288c4975e25b28b1c3469ca84a2c34972e80159777978f3d490b035a6d5eff4  /media/anolis/dev/wii-gcn-console-watch.sha256`
+
+#### Short console reproduction: normal notices, bands pass, strips fail (2026-09-10)
+
+Run another four-iteration band/control pair using exact module3e5dc9fa...
+and checker58ff26a4... from the1000-band baseline. Start separate120-second
+console-watch windows before each runner invocation; both finish samples0.
+The original watcher did not timestamp its start/end, and separate tool calls
+can introduce delays, so exact watcher/run overlap is not proven. Do not
+claim zero samples excludes all blocked periods. Kernel runner timestamps
+independently show the earlier multi-minute status delay did not recur.
+
+Bands: four clean iterations, four clean backgrounds,120 ordered batches,
+1,228,800 pixels per output oracle, no raw/copy mismatches or copy-vs-EFB
+differences. Result0/completed4/requested4, runner exit0. Running-hardware-test
+notice327344.579550 to TEST PASSED327345.627862 is1.048312 seconds; CPU console
+restored327346.103127.
+
+One-row control: iterations0..2 pass; iteration3 (white) fails. All four
+backgrounds and120 batches complete. One raw mismatch, zero RGB565 copy
+mismatches and zero copy-vs-EFB differences, result=-5/completed3/requested4,
+runner exit1. First and only mismatch:
+
+```
+iteration=3 x=604 y=372 expected=00ffffff raw=00fffffb
+expected565=ffff copy=ffff peek_ret=0
+peek0=00fffffb peek1=00fffffb peek2=00fffffb
+```
+
+Blue bit0x04 absent; three reads agree, RGB565 discards it. This run failed
+later than the prior white-iteration1 failures; keep first-error stopping and
+do not describe strip failure timing as deterministic. Running-hardware-test
+notice327560.676128 to TEST FAILED327560.974424 is0.298296 seconds; CPU console
+restored327561.466554. Both audits find no logged timeout/stall/kernel fault.
+The earlier console delay remains unexplained, not fixed or reproduced.
+
+Update watcher to record /proc/uptime at start/end, allowing exact comparison
+with kernel timestamps on future runs. Shell syntax and git diff --check pass.
+Upload only the updated watcher to /tmp and perform a one-second auto smoke
+check: start338167.82/end338170.03, samples0, exit0. No active watchers remain.
+Updated script SHA-256:
+40e700d4eb947f10ca05ac972926a33a111748f17bf154088ec9c31681527e83.
+For future reproductions, start monitoring immediately before the runner and
+verify timestamp overlap; no new1000 run is needed just to seek console delay.
+
+Next geometry isolation: keep16-row bands but emit each band16 times per
+batch. This matches the failing full-width strip path's16 quads per batch,
+vertex byte count and30 completion intervals, while avoiding one-row-high
+geometry. It introduces16-fold overdraw, so it is not a unique causal test.
+Use a default-off diagnostic with exact coverage/count validation, four
+iterations and first-error stopping. This repeat-band variant is not yet
+implemented. The current short/1000 band successes remain a diagnostic
+baseline, not a production correction for native textured corruption.
+
+Both runner cleanups restore CPU console; gcn_gx absent; dmesg collector
+stopped. Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider
+remainsa2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0; decompressed combined capture SHA-256 matches
+ a228a8fc51c038a76364dc22eb973808ad62c5f720581c44c8edb55a084a5219.
+Split the capture at its last two connected markers and audit each run
+separately. Verified remote log compressed, gzip integrity passes; /tmp has
+6.0M available. No driver/default/provider changes in this step. Archive
+includes combined and split captures, audits, watcher outputs/update and
+run/cleanup evidence. Manifest:
+
+`a3ff7fe43b3d839303215c439390a01b4d4259e8b105502e40d32ccb5dccd6ab  /media/anolis/dev/wii-gcn-console-repro.sha256`
+
+#### Sixteen repeats per band pass four-iteration validation (2026-09-10)
+
+Add default-off efb_primitive_repeat_bands, requiring band mode and its
+full-width/batch/primitive prerequisites. Emit each640x16 band16 times per
+batch, retaining30 completion waits, state setup, verified black background
+and full raw/copy oracles. This matches the failing one-row full-width strip
+path's16 quads per batch and authored submission sizes. Ordinary band mode
+still emits one quad. Checker mode repeat requires the new flagY; bands now
+requiresN, so use archived checkers for older modules lacking the parameter.
+
+PowerPC W=1 build, strict host checks, strict checkpatch (zero errors/warnings/
+checks), shell syntax and git diff --check pass. Host GPU/cache stubs verify
+prior geometry modes plus exact16-repeat band coverage/order,1920 quads and
+120 completion calls across four iterations, and omitted-draw rejection.
+Module SHA-256:
+e2237ed243b0e11dc42a525562f9b82124051f451bcd9b15cad58f18aff88a01.
+Checker SHA-256:
+ff6f35d2446fdf26da9be1259ddb269d88125c3532764a400798069e0411f01d.
+
+Hardware arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_batch=1 efb_primitive_full_width=1 efb_primitive_bands=1
+ efb_primitive_repeat_bands=1; checker '4 repeat'. All four iterations pass,
+two red and two white, four clean black backgrounds,120 ordered batches,
+16 quads per batch; first submission1156 authored bytes, subsequent776.
+All1,228,800 pixels per output oracle pass: zero raw/copy mismatches or
+copy-vs-EFB differences. Result0/completed4/requested4, runner/checker exit0.
+All corresponding red/white command hashes repeat identically across same-
+colour iterations. Audit finds no timeout/stall/kernel fault. Runner notice
+to TEST PASSED takes0.276982 seconds; no multi-minute delay observed.
+
+This short test passes with the same primitive count and submission byte
+sizes as the failing one-row strips, but geometry, command contents, raster
+work and timing differ. Critically,16-fold overdraw can overwrite a transient
+error from an earlier primitive before the final oracle. Do not infer command
+transport is proven correct, that taller geometry is uniquely causal, or that
+no intermediate corruption occurred. The final-state test cannot see an error
+that a subsequent identical draw repairs. No1000 run was started.
+
+Next bounded control: repeat four one-row-strip iterations on this exact
+new binary with bands=0 and repeat_bands=0, retaining full-width/batch mode,
+checker '4 full' and first-error stopping. Compare command records against
+prior full-width strip references. If further isolating primitive count,
+consider a control avoiding repeated writes to the same pixels; do not ignore
+the repair-by-overdraw confound. This same-binary strip control was not run
+in this step. No defaults/provider promotion or claimed production fix.
+
+CPU console restored, gcn_gx absent and collector stopped. Boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider unchanged at
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Full capture download exits0; decompressed SHA-256 matches
+31cfcb9f6422a318deedc778d454f6b852874d752967d89680dba3aab319add0.
+Audit trims old history at the last connected marker. Verified device log
+compressed and gzip integrity passes. Archive contains exact module/source/
+checker, incremental patch, build/host/style checks, capture and audit.
+Manifest:
+
+`34b0628ce6a2d06b5db781a6c8a7521ad18e8bd395b595397faa4a7542da7b48  /media/anolis/dev/wii-gcn-efb-repeat4.sha256`
+
+#### Same repeated-band binary fails strip control with mixed-channel error (2026-09-11)
+
+Reuse exact modulee2237ed243b0e11dc42a525562f9b82124051f451bcd9b15cad58f18aff88a01
+and checkerff6f35d2446fdf26da9be1259ddb269d88125c3532764a400798069e0411f01d
+from repeat4. Arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_batch=1 efb_primitive_full_width=1 efb_primitive_bands=0
+ efb_primitive_repeat_bands=0; checker '4 full'. No source/default changes.
+
+Red iteration0 passes; white iteration1 fails. Both backgrounds clean and
+all60 ordered batches complete. Each batch contains16 quads,1156 authored
+bytes for first submission/776 thereafter. Complete command-record sequence
+matches the previous full4 test exactly. Audit reports two raw RGB24 mismatch
+pixels, one RGB565 copy mismatch, zero copy-vs-EFB differences. First error:
+
+```
+iteration=1 x=586 y=382 expected=00ffffff raw=007fffef
+expected565=ffff copy=7ffd peek_ret=0
+peek0=007fffef peek1=007fffef peek2=007fffef
+```
+
+At this pixel red bit0x80 and blue bit0x10 are both absent; three repeated
+reads agree and the copy reproduces the reduced value. The second raw error's
+coordinate/value is not logged. This confirms corruption can affect multiple
+channels at the same pixel, not merely different channels across runs.
+Result=-5/completed1/requested4; two attempted iterations; runner exit1.
+No logged timeout/stall/kernel fault. Running-hardware-test notice to failure
+notice0.575833 seconds; CPU console restored normally.
+
+The same-binary comparison is now four clean repeated-band iterations versus
+failure on the second strip iteration, with matching quad counts/submission
+sizes/cadence. Repeated overdraw can repair earlier errors, so this is not
+proof that command count/transport is correct or height alone is causal.
+Next bounded control: retain16 authored quads per band batch but use15
+zero-area quads followed by one actual640x16 band. This preserves vertex
+count/submission length without repeatedly writing visible pixels. Verify
+degenerate geometry and complete final coverage, keep black-background and
+raw/copy oracles, and run four iterations with first-error stopping. Degenerate
+primitives have different raster work, so this is a command-count control,
+not an equivalent GPU-load control. This padded-band mode is not implemented
+or tested in this step. No1000 run or provider promotion.
+
+Cleanup confirms gcn_gx absent, CPU console restored and collector stopped.
+Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0; decompressed full capture SHA-256 matches
+050a1017831b8da034880c34136c53b940ce715cd259cffcaa1930e7f1f8e4b8.
+Audit trims older history at the last connected marker. Verified remote
+capture compressed; gzip integrity passes. Evidence includes preflight,
+run/client/cleanup, full capture, audit and same-binary/prior-command
+comparison. Exact module/source are in repeat4 archive. Manifest:
+
+`67d3e556bcc01d9679f7fcfce49f2fbe93f789fe39da5e8cadd3a22381782f96  /media/anolis/dev/wii-gcn-efb-repeat-control4.sha256`
+
+#### Padded single-write bands pass four-iteration validation (2026-09-11)
+
+Add default-off efb_primitive_pad_bands, requiring repeated-band mode and
+its existing prerequisites. Within each16-quad batch, emit15 zero-area quads
+with all corners at(0,first), then one visible640x16 band. Preserve vertex
+count, authored submission sizes,30 completion waits, state setup, verified
+black background and full raw/copy oracles. The final visible band covers its
+region once, removing repeated visible writes from the repeat4 control.
+Checker mode padded requires the new flagY; repeat now requiresN, so retain
+archived checkers for older modules lacking the parameter.
+
+PowerPC W=1 build and strict host checks pass. Host GPU/cache stubs verify
+all previous modes, exact15-zero-area/one-visible ordering,1800 degenerate
+and120 visible quads across four iterations,120 completion calls and rejection
+when visible drawing is omitted. Zero-area writes do not change the host
+oracle. Initial checkpatch nesting/line-length warnings were resolved with a
+local padding predicate and wrapped lines; final strict checkpatch reports
+zero errors/warnings/checks. Host source predates only the final line wrap.
+Shell syntax and git diff --check pass. Exact module:
+590a82b1cb64361c11b2f47256c5a1ebffb88c401154dee1b35315aca6c3e30b.
+Checker SHA-256:
+87162fde089e25927eb37c96f324f85e73ae77af1ad27e4b91671c094355c2aa.
+
+Hardware arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_batch=1 efb_primitive_full_width=1 efb_primitive_bands=1
+ efb_primitive_repeat_bands=1 efb_primitive_pad_bands=1; checker '4 padded'.
+All four iterations pass, two red/two white, four clean backgrounds and120
+ordered batches,16 quads per batch. First authored submission1156 bytes,
+later776, matching full-width strip and repeated-band submission sizes.
+All1,228,800 pixels per output oracle pass: zero raw/copy mismatches or
+copy-vs-EFB differences. Result0/completed4/requested4, runner/checker exit0.
+Corresponding same-colour batch hashes repeat identically. No logged timeout,
+stall or kernel fault. Status notice to TEST PASSED0.358361 seconds; normal
+console restoration.
+
+This is a short clean command-count control without repeated visible overdraw.
+It weakens a simple claim that16 authored quads or these submission byte sizes
+alone necessarily cause corruption. Degenerate quads differ from rasterized
+strips in processing and timing, and the binary has changed; do not claim
+transport proven reliable or geometry uniquely causal. Four iterations do
+not establish a failure rate or a production fix. No1000 run was started.
+
+Next bounded control: repeat four full-width one-row-strip iterations on this
+same590a... binary, with bands/repeat_bands/pad_bands=0 and primitive/batch/
+full_width=1, checker '4 full', retaining first-error stopping. Compare all
+batch records with prior strip references. This same-binary strip control
+has not been run here. Defaults and installed provider remain unchanged.
+
+CPU console restored, gcn_gx absent and collector stopped. Boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1; installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0 and decompressed capture SHA-256 matches
+ e8ae1c69069692df5928a97e1406b32e9797927aec035528a0164a10ae569a86.
+Audit trims prior history at the last connected marker. Verified remote log
+compressed; gzip integrity passes. Archive includes exact module/source/
+checker, incremental patch, build/host/style checks, capture and audit.
+Manifest:
+
+`1e7ce75a0186367a78a9c6538497cd698bd143b036ba88a01c197b069e1bc787  /media/anolis/dev/wii-gcn-efb-padded4.sha256`
+
+#### Padded-band binary strip control fails with an added blue bit (2026-09-11)
+
+Reuse exact module590a82b1cb64361c11b2f47256c5a1ebffb88c401154dee1b35315aca6c3e30b
+and checker87162fde089e25927eb37c96f324f85e73ae77af1ad27e4b91671c094355c2aa
+from padded4. Arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_batch=1 efb_primitive_full_width=1 efb_primitive_bands=0
+ efb_primitive_repeat_bands=0 efb_primitive_pad_bands=0; checker '4 full'.
+No source/default changes. The test stops at red iteration0: ret=-5,
+completed0/requested4, runner exit1. White is not reached. Black background
+passes all307,200 pixels and all30 ordered batches complete.16 quads per
+batch;1156 first/776 subsequent authored bytes. All red command records
+match the preceding full4 reference exactly.
+
+Three raw RGB24 pixels differ, all three RGB565-visible, with zero copy-vs-EFB
+differences. Only the first mismatch is located/logged:
+
+```
+iteration=0 x=503 y=262 expected=00ff0000 raw=00ff0040
+expected565=f800 copy=f808 peek_ret=0
+peek0=00ff0040 peek1=00ff0040 peek2=00ff0040
+```
+
+Blue bit0x40 appears where blue should be zero; repeated reads agree and
+RGB565 copying reproduces the error. The other two coordinates/values are
+not logged. This observation shows corruption can set bits as well as clear
+them; it contradicts a lost-bits-only description. Do not infer a specific
+memory/transport or physical failure. Same-binary comparison remains four
+clean padded-band iterations versus immediate strip failure, with matching
+vertex count/submission sizes but different rasterized geometry/work.
+
+Next bounded geometry control: two-row-high full-width strips, eight visible
+quads per16-row batch plus eight zero-area padding quads. Keep16 authored
+quads, identical submission sizes and30 completion intervals; cover each pixel
+once. This lies between failing one-row strips and the clean16-row band
+control while keeping command count fixed. Validate coverage/padding order
+and run four iterations with first-error stopping. Rasterized primitive count
+and timing still vary; no unique causal claim follows. This two-row variant
+is not implemented/tested here. No1000 run or provider promotion.
+
+Audit reports no timeout/stall/kernel fault. Runner status notice to failure
+notice1.175331 seconds; CPU console restored normally. gcn_gx absent and
+collector stopped. Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed
+provider remainsa2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0; decompressed capture SHA-256 matches
+343d3b8b03febe16e347fe69ffcdb87bf3ae6a8ed70b9bcc804714eb35fd40de.
+Audit trims older history at the last connected marker. Verified remote log
+compressed; gzip integrity passes. Archive includes preflight/client/cleanup,
+full capture, auditor and same-binary/prior-command comparison. Exact module/
+source remain in padded4 archive. Manifest:
+
+`06f4c99bd61c9249b417ae0ae1ec3087cb69a7e5886de198bd0781d1c2ca869f  /media/anolis/dev/wii-gcn-efb-padded-control4.sha256`
+
+#### Padded two-row strips fail first red iteration (2026-09-11)
+
+Add default-off efb_primitive_two_rows, requiring padded-band mode and its
+existing prerequisites. Emit eight zero-area quads at(0,first), then eight
+640x2 strips covering the16-row batch exactly once. Keep16 authored quads,
+30 completion intervals, background verification, state setup and full raw/
+copy oracles. Checker mode two-rows requires the new flagY; padded requiresN,
+so archived checkers remain necessary for older modules lacking the parameter.
+
+PowerPC W=1 build, strict host checks, strict checkpatch (zero errors/warnings/
+checks), shell syntax and git diff --check pass. Host GPU/cache stubs verify
+all prior modes plus exact padding/strip order and coverage,960 zero-area and
+960 visible quads over four iterations,120 completion calls, and omitted-draw
+rejection. Initial style line-length warning fixed by wrapping arguments;
+host source predates only that whitespace change. Module SHA-256:
+7c105026cf675c4f01ad2058d6662503e8084e67e2bdb61ec7add0a8c9be188b.
+Checker SHA-256:
+6412924a21dd61a51b392081c0ca4de8dc7476153d4683e84ef92827197f8092.
+
+Hardware arguments: efb_clear_iterations=4 efb_primitive_test=1
+ efb_primitive_batch=1 efb_primitive_full_width=1 efb_primitive_bands=1
+ efb_primitive_repeat_bands=1 efb_primitive_pad_bands=1 efb_primitive_two_rows=1;
+checker '4 two-rows'. Black background passes and all30 ordered batches
+complete for iteration0;16 quads per batch,1156 authored bytes initially,
+776 subsequently. First red iteration fails, result=-5/completed0/requested4,
+runner exit1; white is not reached. Exactly one raw RGB24 mismatch, zero
+RGB565 copy mismatches, zero copy-vs-EFB differences:
+
+```
+iteration=0 x=307 y=75 expected=00ff0000 raw=00fd0000
+expected565=f800 copy=f800 peek_ret=0
+peek0=00fd0000 peek1=00fd0000 peek2=00fd0000
+```
+
+Red bit0x02 absent, all three raw repeat reads agree. RGB565 discards this
+bit, so raw validation remains necessary. Corruption is not confined to
+one-row-high geometry. This does not establish a precise height threshold,
+causal pipeline stage or hardware defect. No1000 run was started.
+
+Next bounded step: four-row-high strips with12 zero-area quads followed by
+four visible640x4 strips per16-row batch. Preserve16 authored quads, identical
+submission sizes and30 completion waits. Validate exact coverage/order, then
+four iterations with first-error stopping. Include a same-binary padded16-row
+band control to verify the clean comparison still holds. Neither next control
+is implemented/run here. No defaults/provider promotion; native textured
+corruption remains unresolved.
+
+Full audit confirms no timeout/stall/kernel fault. Status notice to failure
+notice0.976726 seconds; CPU console restored normally, gcn_gx absent and
+collector stopped. Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed
+provider remainsa2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0; decompressed capture SHA-256 matches
+b761ae826ce6c0976ed55bc7cc6b1a8ed427b5a318c92e18732a62a7667e2a87.
+Audit trims older history at the last connected marker. Verified remote log
+compressed; gzip integrity passes. Archive contains exact module/source/
+checker, incremental patch, build/host/style checks, capture and audit.
+Manifest:
+
+`bd427929b4c4bdfb4cbf9f1582a82afe60c285ede39a5beb9902cc6bdbb03c9f  /media/anolis/dev/wii-gcn-efb-tworows4.sha256`
+
+#### Four-row strips and same-binary padded bands pass short validation (2026-09-11)
+
+Add default-off efb_primitive_four_rows, requiring padded-band mode and
+excluding two-row mode. Emit12 zero-area quads then four640x4 strips per
+16-row batch. Preserve16 authored quads,30 completion waits, full coverage
+without overdraw, state setup and all background/raw/copy checks. Checker
+four-rows requires the flagY; padded requires both row-mode flagsN, so retain
+archived checkers for older modules lacking the new parameter.
+
+PowerPC W=1 build, strict host checks, strict checkpatch (zero errors/warnings/
+checks), shell syntax and git diff --check pass. Host GPU/cache stubs cover
+prior modes and exact four-row padding/coverage/order,1440 zero-area and480
+visible quads plus120 completion calls over four iterations, and omitted-draw
+rejection. Module SHA-256:
+5695ae0415054b49f13f4a9d451ba807f3552c1613944b4242d184a2e0c513df.
+Checker SHA-256:
+fc680e83350c2e15e1e6c566913ef5c4ac7ecd36053114327965d864dae9d027.
+
+Four-row run: count4, primitive/batch/full_width/bands/repeat_bands/pad_bands/
+four_rows=1, two_rows=0; checker '4 four-rows'. All four iterations pass,
+two red/two white, four clean black backgrounds,120 ordered batches.16 quads
+per batch;1156 first/776 subsequent authored bytes. All1,228,800 pixels per
+output oracle pass with zero raw/copy mismatches and copy-vs-EFB differences.
+Result0/completed4/requested4; runner exit0. Corresponding same-colour hashes
+repeat identically. Start-to-result3.592355 seconds; notice to TEST PASSED
+0.757308 seconds; normal CPU console restoration.
+
+Reuse the exact binary/checker for padded16-row band control, four_rows=0
+and two_rows=0, other prerequisite flags unchanged; checker '4 padded'. Again
+all four iterations pass, four clean backgrounds and120 ordered batches,
+1,228,800 pixels per output oracle with all discrepancy counts zero. Entire
+command-record sequence matches the preceding padded4 reference. Runner
+exit0, result0/completed4/requested4. Notice to TEST PASSED0.924202 seconds;
+normal restoration. Both audits find no timeout/stall/kernel fault.
+
+Short observations now include one/two-row failures and four/16-row passes,
+but this is not a demonstrated stable threshold: exposure is short and actual
+rasterized primitive count/timing changes. Next bounded comparison: repeat
+four two-row iterations using this5695... binary (two_rows=1, four_rows=0),
+checker '4 two-rows', stop at first mismatch, compare hashes with tworows4.
+If that preserves the distinction, longer four-row validation can use the
+user-selected1000 ceiling; no such longer run was started here. Do not
+promote defaults/provider or call native textured corruption fixed.
+
+Both collectors stopped, gcn_gx absent, CPU console restored. Boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1; installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Downloads exit0; decompressed hashes match:
+
+```
+3096cc548ff54285aec87156b5a6537119251ca3e61d473539a84d5ec2c5b647  fourrows4
+554e7f944efda9fcca69f6f33bf8f3db2ac2ca538124fd5bbb391a385a865807  fourrows-control4
+```
+
+Audits trim prior history at the last connected marker. Verified remote logs
+compressed; gzip integrity passes. Archive includes exact module/source/
+checker, incremental patch, build/host/style checks, captures and audits.
+Manifests:
+
+`a341484f994e2d5c86366b21f82e5577aa60773339c8198c6aa12815b434f6d5  /media/anolis/dev/wii-gcn-efb-fourrows4.sha256`
+
+`5cc89aaa24980fd7f972ba2a82bd03c03099f0a8dec3eba606b256efa0bcb66c  /media/anolis/dev/wii-gcn-efb-fourrows-control4.sha256`
+
+#### Same four-row binary fails two-row control immediately (2026-09-11)
+
+Reuse module5695ae0415054b49f13f4a9d451ba807f3552c1613944b4242d184a2e0c513df
+and checkerfc680e83350c2e15e1e6c566913ef5c4ac7ecd36053114327965d864dae9d027
+from the four-row/padded16-row passes. Arguments: efb_clear_iterations=4,
+primitive/batch/full_width/bands/repeat_bands/pad_bands/two_rows=1,
+four_rows=0; checker '4 two-rows'. No source/default changes. First red draw
+fails, result=-5/completed0/requested4, runner exit1; white not reached.
+Verified black background clean, all30 batches complete,16 quads per batch,
+1156 first/776 subsequent authored bytes. Every command record matches prior
+tworows4 exactly.
+
+Audit finds three raw RGB24 and three RGB565 mismatches, zero copy-vs-EFB
+differences. First error:
+
+```
+iteration=0 x=605 y=296 expected=00ff0000 raw=007f0000
+expected565=f800 copy=7800 peek_ret=0
+peek0=007f0000 peek1=007f0000 peek2=007f0000
+```
+
+Red bit0x80 absent at the first pixel; repeated reads agree and copy faithfully
+reproduces it. Other two locations/values are not logged. Unlike the previous
+two-row raw-only bit0x02 discrepancy, this repeat is RGB565-visible. Same-
+binary short comparison is now two-row failure versus four-row and padded
+16-row passes. This does not prove a stable height threshold or unique cause;
+geometry and actual rasterized primitive count/timing still differ.
+
+Next bounded step: longer four-row validation on this exact binary, capped
+at1000 iterations, four_rows=1/two_rows=0, checker '1000 four-rows', retaining
+first-error stopping and raw/copy/background oracles. Plan full30,000-batch
+capture storage and compare command hashes against fourrows4 references.
+Timestamped console watcher can cover the run, but start it immediately before
+testing and verify its window overlaps any delay. No longer run started here.
+The1000 ceiling remains; no defaults/provider promotion or native fix claimed.
+
+No logged timeout/stall/kernel fault. Status notice to failure notice0.277729
+seconds; normal CPU console restoration. gcn_gx absent, collector stopped,
+boot unchanged444193a6-aee4-4ae3-a619-4f6dd90fccf1. Installed provider remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0; decompressed SHA-256 matches
+477000661858841a9466bb8470236fdcc300fb449daa4728e9689422891aabe4.
+Audit trims prior history at the last connected marker. Verified remote log
+compressed; gzip integrity passes. Archive includes preflight/client/cleanup,
+full capture, auditor and same-binary/prior-command comparison; exact module/
+source are in fourrows4 archive. Manifest:
+
+`4ef94b9e02c0f314a923b7f5c7559f0b25d34c582469afdc25c2a01b6668d7e7  /media/anolis/dev/wii-gcn-efb-fourrows-two-control4.sha256`
+
+#### Four-row1000 passes; console-lock delay captured (2026-09-11)
+
+Run exact module5695ae0415054b49f13f4a9d451ba807f3552c1613944b4242d184a2e0c513df
+and checkerfc680e83350c2e15e1e6c566913ef5c4ac7ecd36053114327965d864dae9d027
+with count1000, primitive/batch/full_width/bands/repeat_bands/pad_bands/
+four_rows=1, two_rows=0; checker '1000 four-rows'. Remote reuse verifies
+checksums. No source/default changes. Compress an older completed native log
+with gzip integrity check to increase free /tmp space5.2M to7.9M before full
+capture. Start timestamped console watcher for up to1200 seconds.
+
+All1000 iterations pass:500 red/500 white,1000 clean black backgrounds,
+30,000 ordered batches. Audit confirms16 quads per batch,1156 first/776 later
+authored bytes and all command hashes match corresponding alternating
+fourrows4 references. All307,200,000 pixels per output oracle pass, zero raw
+EFB errors, RGB565 copy errors or copy-vs-EFB differences. No first mismatch
+or logged timeout/stall/Oops/BUG/Call Trace. Result0/completed1000/requested1000,
+checker PASS and runner exit0. Drawing start-to-result492.214504 seconds
+(8.2 minutes). This is a clean bounded four-row diagnostic, not proof of a
+stable height threshold or a correction to native textured rendering. The
+1000 ceiling was reached exactly; no further pixel run started.
+
+The post-test delay recurs. Running-hardware-test notice413979.649232 to
+TEST PASSED414182.580657 is202.931425 seconds; CPU console restored414183.395684.
+Watcher starts413472.39, before the test, and captures three samples at
+413982.01,413984.80 and413987.68; exits automatically413990.31. In all samples,
+notice PID374 is D-state bash, wchan console_lock, with stack:
+
+```
+console_lock -> do_con_write -> con_write -> n_tty_write
+-> file_tty_write -> vfs_write -> ksys_write
+```
+
+This directly confirms the runner's tty write waiting for console_lock.
+Other sampled workers show gcn_drm_submit/gcn_drm_pipe_update and DRM atomic
+commit/deferred fbdev damage paths, including drm_atomic_helper_wait_for_vblanks.
+These snapshots race with task execution (some status/wchan/stack fields
+change between reads); do not treat them as an atomic snapshot or proof of
+lock ownership. They do not identify the console-lock holder, establish lock
+inversion, prove a vblank fault or tie the delay causally to pixel corruption.
+A later read-only active/blocked stack request arrives after cleanup and adds
+no blocked-holder evidence. No manual recovery performed; runner completes
+and unloads automatically.
+
+Next investigation: inspect legacy printk/console flushing and deferred DRM
+console updates under the30,000-batch logging load. A console backlog is a
+hypothesis, not established cause. Arrange holder-oriented stack capture or
+a bounded logging/console control rather than another unmodified1000 run.
+Keep clean four/16-row baselines and failing two-row references intact; no
+production/default/provider changes based solely on these diagnostic passes.
+
+Collector stopped, watcher exited after three samples, gcn_gx absent and CPU
+console restored. Boot unchanged444193a6-aee4-4ae3-a619-4f6dd90fccf1; installed
+provider remainsa2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Download exits0; complete decompressed kernel capture SHA-256:
+ c9094d042aa55f8102d340339de8d85bf2bf82d42312f5d801fa2f5ed4b48bd6.
+Complete watcher capture SHA-256:
+ 552f1a89fb3c50296736c86b6f90ac0baa1c13c01a4b0b8f2e517575f63f2ec2.
+Audit trims prior history and indexes positions for efficient30,000-record
+checking. Verified device capture compressed; gzip integrity passes. Archive
+includes run/preflight/storage, full kernel and watcher captures, later stack
+request, cleanup and audit; exact binary/source remain in fourrows4 archive.
+Manifest:
+
+`badc1345c43e73af211f880da7abd52099635eb1454ac2bdbc4b6ac0b65b41d5  /media/anolis/dev/wii-gcn-efb-fourrows1000.sha256`
+
+### Compact EFB test progress (2026-09-11)
+
+At the user's request, EFB iteration runs now show a single updating progress
+bar on the invoking terminal and Wii tty0, followed by the existing test result.
+The driver exposes read-only `efb_clear_completed`, advanced only after a whole
+iteration passes all pixel checks. The remote helper samples it once per second
+while insmod runs. A failing iteration does not advance the bar.
+
+The render-cycle runner selects this helper when `efb_clear_iterations` is
+positive. It temporarily sets console_loglevel to 4, retaining errors on the
+console and all detailed diagnostic records in dmesg. Its EXIT cleanup restores
+the original console log level. The small helper is uploaded even with
+`--reuse-remote`; precise progress requires the new module counter. Other test
+clients retain their existing output. Geometry and the 1000-iteration ceiling
+are unchanged.
+
+The W=1 module build succeeded, and both shell syntax checks and diff whitespace
+checks passed. A four-iteration four-row hardware smoke test exited 0 with PASS;
+the bar displayed 0/4 then 4/4 (the short run completed between refreshes).
+The device's printk settings were `7 4 1 7` before and after the run, and gcn_gx
+was absent afterward. This checks the new progress path, not long-run graphics
+reliability or the cause of the earlier console-lock delay. The failure cleanup
+path uses the same EXIT trap but has not been separately exercised here.
+
+Module SHA-256:
+`dbcdad44c559ff1f7e58f56ad704c5aa38c401a91423b3ee205e959d5dbe5a74`.
+
+The checksum-verified full capture retains all 120 batch records, four clean
+background checks, and four final pixel checks (1,228,800 pixels per oracle),
+with zero mismatches and no kernel faults. Detailed logs remain available despite
+the compact display. Raw capture SHA-256:
+`3835a227eb30036255eafe9750c449d89398ae3b7d8b442a8989fea6f24a7b9b`.
+Evidence manifest:
+`83ce4cb8c0b247c666379076293cd13c32148ad8441e7793d764f136bd1a2b58  /media/anolis/dev/wii-gcn-efb-progress4.sha256`.
+
+#### Quiet-console four-row 1000 control (2026-09-11)
+
+Continued with a bounded 1000-iteration four-row run using the checksum-reused
+progress module dbcdad44c559ff1f7e58f56ad704c5aa38c401a91423b3ee205e959d5dbe5a74
+and checker fc680e83350c2e15e1e6c566913ef5c4ac7ecd36053114327965d864dae9d027.
+Arguments retain primitive/batch/full_width/bands/repeat_bands/pad_bands/
+four_rows=1 and two_rows=0. The runner uses the new bar and console_loglevel=4;
+all per-batch logging stays enabled. Capture uses dmesg -W, avoiding prior
+history without clearing the ring buffer. A console watcher starts at uptime
+417375.68 and is stopped after runner completion; its saved output contains
+no blocked-runner samples. This sampling result does not exclude short waits.
+
+Runner exits 0, checker PASS, result completed=1000/requested=1000/ret=0, and
+the bar reaches 1000/1000. Result timestamp 417589.523142, running-test notice
+417592.711132, PASS 417593.033220, CPU console restored 417593.438688.
+Running-test to PASS is 0.322088 seconds (previous verbose run 202.931425);
+result to console restored is 3.915546 seconds. The earlier long delay does
+not recur. This supports console-output overhead as a contributor, but does
+not establish the exact lock holder or root cause: the progress module and
+once-per-second tty writes are also differences from the earlier run.
+
+The user suggested delays might reflect waiting for Enter. Approval waits
+can affect overall elapsed time, but the earlier delay was measured between
+on-device kernel timestamps, with the runner sampled in console_lock while
+writing tty0. Do not conflate approval latency with that observed device wait.
+
+After cleanup, printk settings are restored to 7 4 1 7; gcn_gx is absent;
+boot ID remains 444193a6-aee4-4ae3-a619-4f6dd90fccf1 and the installed provider
+remains a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+No production/default changes or additional pixel run follow this control.
+
+Full capture downloaded successfully and its decompressed SHA-256 matches the
+device: 075b87ea40b583d70d335a8d07aa9385ca7fda39cddc3e76ac9d0a4e97350bbc.
+Audit verifies all 1000 iterations, 1000 clean backgrounds and 30,000 ordered
+batches, including every command hash against the alternating fourrows4
+reference. All 307,200,000 pixels per oracle pass with zero raw EFB errors,
+copy errors or copy-vs-EFB differences; no logged timeout/stall/kernel fault.
+Drawing duration is 169.791465 seconds, versus 492.214504 previously.
+
+Retain quiet output for subsequent testing. Next useful geometry control is
+the previously failing two-row case on this same progress module, initially
+bounded to four iterations and stopping at the first mismatch. This checks
+whether its failure reproduces under the reduced console load before drawing
+further conclusions about primitive height. It has not been started here.
+Evidence manifest:
+`6d06f0123638df126bb65d137f960c70d0109151b948f03955558472dc67a923  /media/anolis/dev/wii-gcn-efb-quiet1000.sha256`.
+
+#### Quiet two-row control reproduces corruption (2026-09-11)
+
+Run the same checksum-reused progress module dbcdad44c559ff1f7e58f56ad704c5aa38c401a91423b3ee205e959d5dbe5a74
+and checker fc680e83350c2e15e1e6c566913ef5c4ac7ecd36053114327965d864dae9d027,
+with primitive/batch/full_width/bands/repeat_bands/pad_bands/two_rows=1,
+four_rows=0, requested iterations=4, checker '4 two-rows'. Quiet-console
+progress remains enabled. Capture uses dmesg -W; no source changes.
+
+First red iteration fails: ret=-5, completed=0/requested=4, runner exit 1.
+One clean black background, 30 ordered batches with 16 quads each and authored
+bytes 1156 first/776 later. All 30 command records exactly match the prior
+fourrows-two-control4 reference. All 307,200 pixels per oracle checked:
+2 raw EFB errors, 2 RGB565 errors, 0 copy-vs-EFB differences.
+First wrong pixel (601,300): expected 00ff0000, raw 007f0000; expected RGB565
+f800, copy 7800. All three additional MMIO peeks return 007f0000 successfully.
+Thus the red channel's high bit is missing in the raw EFB and faithfully
+propagates to the copy. The second wrong pixel's location is not logged.
+No logged timeout/stall/Oops/BUG/Call Trace.
+
+This reproduces the two-row failure with reduced console output, immediately
+after the same module's clean quiet four-row 1000 control. Console verbosity
+is therefore not required for this corruption. The result does not establish
+a stable primitive-height threshold or a population failure rate, and does
+not resolve the native textured rendering fault.
+
+The bar remains at 0/4 successfully completed iterations, followed by the
+checker result -5 and Wii TEST FAILED notice. This exercises the real failure
+cleanup path: console printk settings restore to 7 4 1 7, gcn_gx is absent,
+and CPU console is restored without manual recovery. Running-test notice
+417817.099121 to TEST FAILED 417817.413247 is 0.314126 seconds; console restored
+417817.861327. Boot remains 444193a6-aee4-4ae3-a619-4f6dd90fccf1; installed
+provider remains a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Collector stopped, complete download exits 0, raw SHA-256 matches device:
+`e2e8e73e52a7a01ea95106468738816e69c0ea0ebbff9bc7b4d80af60c6a2cdc`.
+No further run or production/default change follows this diagnostic. Preserve
+the passing four-row and failing two-row cases for the next raster/geometry
+experiment; repeating the same long four-row test adds little evidence now.
+Evidence manifest:
+`6c51d2c343d751fb4103ac44fd8cd5a8891b322b4ae41cd8a0d54647aeffb059  /media/anolis/dev/wii-gcn-efb-quiet-two4.sha256`.
+
+#### Interleaved two-row padding control (2026-09-11)
+
+Add default-off `efb_primitive_interleave`, valid only with two-row mode.
+Instead of eight zero-area quads followed by eight two-row strips, emit one
+zero-area quad before each strip. Padding coordinates remain (0,first) for
+both corners, so this permutes the same 16 quads, retains each visible strip
+and its order, and preserves pixel coverage and authored command length.
+The checker gains an `interleaved` case requiring both flags. W=1 module build,
+shell syntax and diff whitespace checks pass; production defaults unchanged.
+
+Module SHA-256 d3f245293150ba67e20fd4a2f9c9aa456bcb3a7378e0a6e7d3443b332f270373;
+checker SHA-256 77a7032c89eeaaf7ab89084ba218ba10b4d559bab9cb36fbfac659b04ca2313f.
+Run at most four iterations with quiet progress, two_rows/interleave=1,
+four_rows=0, all prerequisite primitive/batch/full_width/bands/repeat/pad flags
+set. Stop on the first mismatch. First red iteration fails, ret=-5,
+completed=0/requested=4; runner exit 1. One clean black background, 30 batches,
+16 quads each, first 1156/later 776 authored bytes. Batch metadata equals the
+prior quiet two-row control, but all 30 hashes change with the permutation.
+
+One raw EFB and one RGB565 pixel are wrong, with zero copy-vs-EFB differences.
+At (575,315), expected 00ff0000 becomes 00bf0000; expected565 f800 becomes
+b800. Three additional MMIO peeks all return 00bf0000, peek_ret=0. This is
+loss of red bit 0x40 in EFB, faithfully propagated to the copy. All 307,200
+pixels per oracle checked; no logged timeout/stall/kernel fault. Interleaving
+zero-area padding does not prevent the two-row corruption; it does not prove
+anything about how much processing delay degenerate quads introduce.
+
+Failure cleanup restores printk to 7 4 1 7 and unloads gcn_gx. Boot unchanged
+444193a6-aee4-4ae3-a619-4f6dd90fccf1; installed provider unchanged
+a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Collector stopped and download exits 0; raw capture hash matches device:
+42b233ca3def6c2ed40e5adf0d8c146447953d77815b9869f518b56fa235c19c.
+
+Run a same-build four-row baseline with two_rows/interleave=0, four_rows=1,
+requested=4. Runner exits 0, checker PASS, bar reaches 4/4. This paired short
+control checks that the known passing configuration survives the diagnostic
+change; it is not another reliability claim or a fix for native rendering.
+
+Baseline full audit confirms four clean backgrounds, 120 ordered batches
+exactly matching the fourrows4 reference, and 1,228,800 pixels per oracle with
+zero mismatches and no kernel faults. Module absent and printk restored to
+7 4 1 7 after success. Initial uncompressed SSH transfer was interrupted after
+it stopped making progress; compressed retry exits 0, and decompressed capture
+SHA-256 matches the device:
+ef259068b52b81d5a296479243c289882180a3b9076caa678369e9a736db8ea1.
+This transfer delay is separate from device test/console timing.
+
+Both captures are complete and verified. No further run started. A future
+control can vary the order of visible two-row strips while retaining coverage
+to test whether traversal order matters; the current padding permutation alone
+does not discriminate raster shape from raster scheduling.
+Evidence manifests:
+
+`89f2779176c208d3e11f0ebe848bdf7d2341c17786aaf9799902123e83b8323b  /media/anolis/dev/wii-gcn-efb-interleave4.sha256`.
+
+`349eefb7968e85ae7d227256840a79f5e3b23e6ae1e1bdaae249ab7831c3366a  /media/anolis/dev/wii-gcn-efb-interleave-four4.sha256`.
+
+#### Alternating two-row strip order also fails (2026-09-11)
+
+Add default-off `efb_primitive_alternate`, requiring two-row mode and excluding
+interleaved padding. Keep eight zero-area quads at the front of each batch;
+permute visible strip offsets from 0,2,4,6,8,10,12,14 to 0,4,8,12,2,6,10,14.
+Every two-row strip is still emitted exactly once, with unchanged coverage,
+vertex count, command length and padding. The checker adds an `alternate`
+case verifying two_rows/alternate=Y and interleave=N. W=1 build, shell syntax,
+and diff whitespace checks pass. No production/default changes.
+
+Module SHA-256 9fa8a1c746c463ff93f5dd3be9044e481dfcaf1787405f84f5485c2a6ad9c1b3;
+checker SHA-256 75a42d98cceb60db8ac853ed1e323a0dc346fe97d4d8048d57b18a3c8fbcaae8.
+Quiet progress run requests four iterations, with primitive/batch/full_width/
+bands/repeat_bands/pad_bands/two_rows/alternate=1 and four_rows/interleave=0.
+First red iteration fails: ret=-5, completed=0/requested=4, runner exit 1.
+One clean black background and 30 ordered batches, 16 quads each, 1156 first/
+776 later authored bytes. All batch metadata equals the previous quiet two-row
+control; all 30 command hashes differ as expected from the permutation.
+
+One wrong pixel in raw EFB and RGB565, zero copy-vs-EFB differences, with all
+307,200 pixels per oracle checked. At (605,296), expected red 00ff0000 becomes
+007f0000; expected565 f800 becomes 7800. All three additional MMIO peeks return
+007f0000, peek_ret=0. No logged timeout/stall/Oops/BUG/Call Trace. Original
+top-to-bottom submission order is therefore not required for the two-row
+fault. This does not identify its root cause, prove a height threshold, or
+establish a failure rate. The same coordinate and red-bit loss occurred in
+the earlier fourrows-two-control4 run; repeated location alone does not prove
+a defective memory cell.
+
+Failure cleanup restores printk to 7 4 1 7; gcn_gx is absent, CPU console
+restored, collector stopped. Boot unchanged444193a6-aee4-4ae3-a619-4f6dd90fccf1;
+installed provider unchanged
+a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Compressed capture download exits 0, full decompression checksum matches device:
+3b8b128fb220a81f2c665f673ec661a2f4f08c73a9cba53cb3470fc0abf8245f.
+No further run started; the four-row baseline was last tested on the preceding
+interleave build, not this build. Ordering permutations have now failed to
+prevent corruption. Next investigation should change a distinct variable,
+such as strip-edge alignment, retaining the existing references and bounded
+first-mismatch controls rather than repeating a long passing run.
+Evidence manifest:
+`711b170bfbb11bbd50e64b72ed8a19fabb6e164d0a99e9ef299dd9c387c6d21d  /media/anolis/dev/wii-gcn-efb-alternate4.sha256`.
+
+#### Odd two-row boundaries pass short test; original control fails (2026-09-11)
+
+Add default-off `efb_primitive_odd_rows`, requiring two-row mode and excluding
+interleave/alternate. In each 16-row batch emit seven zero-area pads, a one-row
+leading strip, seven two-row strips starting at odd row offsets 1,3,...,13,
+and a one-row trailing strip. Coverage remains exactly 640x16 with no overdraw.
+Total remains 16 quads and unchanged command length, but compared with the
+original there are nine visible strips instead of eight and seven pads instead
+of eight. This is an alignment lead with an explicit edge-geometry confound.
+The checker adds `odd-rows`; W=1 build, shell syntax and diff checks pass.
+
+Module SHA-256 854d9011f0463ef9fa44966aa47e93f5bde134814945e0c7c7b4e0b9675d12d5;
+checker SHA-256 b79707575f3e8b08f735266210e2c618c5595247d56a4b7b33aa51f26e571d0b.
+Run four iterations with primitive/batch/full_width/bands/repeat/pad/two_rows/
+odd_rows=1, four_rows/interleave/alternate=0, quiet progress. PASS, runner exit 0,
+completed4/requested4. Four clean black backgrounds, 120 ordered batches,
+16 quads each, first1156/later776 bytes. All 1,228,800 pixels per oracle clean:
+zero raw EFB, copy or copy-vs-EFB differences; no logged kernel faults.
+All first-red batch metadata matches the original control while command hashes
+differ, as expected. This is a short pass, not reliability proof.
+
+Immediately run the original two-row arrangement on this same checksum-reused
+build, odd_rows=0 and other permutation flags=0, requested4. First red iteration
+fails: ret=-5, completed0/requested4, runner exit1. One clean background,
+30 ordered batch records exactly match the earlier quiet-two4 reference.
+At (603,10), expected00ff0000 becomes00fe0000; all three rereads return00fe0000.
+All307,200 pixels checked: one raw EFB mismatch, zero RGB565 mismatches,
+zero copy-vs-EFB differences. Expected565/copy both f800: loss of the red LSB
+is masked by RGB565 quantization. No logged timeout/stall/kernel fault.
+
+Both tests stop/clean up normally, printk restored7 4 1 7, gcn_gx absent and CPU
+console restored; collectors stopped and compressed downloads exit0. Each full
+capture SHA-256 matches the value from the device. Boot and installed provider
+remain unchanged, as recorded in oddrows4 cleanup. Exact binary/source/checker,
+client logs, complete captures, audits and cleanup are archived below.
+
+Boundary alignment is now a useful lead, but the edge strips/padding count also
+changed. Next useful control: retain seven pads and the same visible-height
+multiset (two one-row strips and seven two-row strips), but put the two one-row
+strips together at the beginning of each batch so subsequent two-row boundaries
+are even again. This would control the count/height confound more closely before
+considering a longer odd-boundary run. No further test was started here; no
+production/default fix is claimed.
+Evidence manifests:
+
+`9dcaeba1a767a4f6a72e9d1b786587604240a54d80717e43aa8cf7d558ef25a3  /media/anolis/dev/wii-gcn-efb-oddrows4.sha256`.
+
+`cc23d0e11c865232aae21488b88f23667dd039af68915b57754d5b0ead2248dc  /media/anolis/dev/wii-gcn-efb-oddrows-two4.sha256`.
+
+#### Matched strip-height even-boundary control fails; odd baseline passes (2026-09-11)
+
+Add default-off `efb_primitive_edge_pair`, requiring odd_rows. Keep the seven
+padding quads and the same visible-height multiset as odd_rows (two one-row
+strips plus seven two-row strips), but draw both one-row strips first, then
+start two-row strips at offsets2,4,...,14. Both layouts cover each pixel exactly
+once and retain16 quads/batch and1156 first/776 later authored bytes. The new
+checker `edge-pair` requires odd_rows/edge_pair=Y. W=1 build, shell syntax and
+diff checks pass. No production/default changes.
+
+Module SHA-2561c32b81ba62591a96efce6e113fdc2c26ce49287d1822768865e7d46d0c3d31c;
+checker SHA-256c8392a9b5d5dbfeceffeeac2d3bd79000dc7374a2f3f95e4e33a2161750c13a6.
+Quiet four-iteration run sets primitive/batch/full_width/bands/repeat/pad/
+two_rows/odd_rows/edge_pair=1 and four_rows/interleave/alternate=0.
+First red iteration fails, ret=-5, completed0/requested4, runner exit1.
+One clean black background,30 ordered batches. All batch metadata matches
+oddrows4, while all30 command hashes change. All307,200 pixels per oracle
+checked: one raw EFB and one RGB565 error, zero copy-vs-EFB differences.
+At(590,394), expected00ff0000 becomes00bf0000; expected565f800, copyb800.
+All three MMIO rereads return00bf0000. This pixel is in the interior two-row
+strip[394,396), not either one-row edge strip. No logged kernel faults.
+
+On the same checksum-reused build, set edge_pair=0 and rerun four odd_rows
+iterations. PASS, runner exit0, completed4/requested4; four clean backgrounds,
+120 ordered batches exactly matching the prior oddrows4 reference. All1,228,800
+pixels per oracle pass; zero raw/copy/copy-vs-EFB differences or kernel faults.
+This controls total padding/visible count and the set of strip heights more
+closely: even boundaries fail while odd boundaries pass short tests. Strip
+placement and the sequence of heights still differ; it is not a proof of the
+hardware mechanism or a reliable workaround for native textured rendering.
+
+Both collectors stopped, full compressed downloads exit0 and decompressed
+SHA-256 values match device hashes in cleanup records. Both paths restore
+printk7 4 1 7, unload gcn_gx and restore the CPU console normally. Boot and
+installed provider unchanged, recorded in edgepair4 cleanup. Evidence includes
+exact new source/module/checker, client logs, full captures, audits and cleanup.
+
+The next useful bounded test is an odd-boundary run up to1000 iterations on
+this exact build, stopping at the first mismatch, to challenge the short-pass
+observation before calling the alignment effect robust. It has not been
+started here; preserve the matched even-boundary failing reference.
+Evidence manifests:
+
+`23dcf7d91c140501b61839680fc3169cf72339e458f35ffb8109881a4c890b21  /media/anolis/dev/wii-gcn-efb-edgepair4.sha256`.
+
+`27ca30617dec4f68d246a32ac91b58fea243b48c260255e038433cf581dee835  /media/anolis/dev/wii-gcn-efb-edgepair-odd4.sha256`.
+
+#### Extended odd-boundary test fails at a one-row edge (2026-09-11)
+
+Use exact edgepair4 module1c32b81ba62591a96efce6e113fdc2c26ce49287d1822768865e7d46d0c3d31c
+and checkerc8392a9b5d5dbfeceffeeac2d3bd79000dc7374a2f3f95e4e33a2161750c13a6,
+verified by remote reuse. Request1000 odd-rows iterations with prerequisite
+primitive/batch/full_width/bands/repeat/pad/two_rows/odd_rows=1 and
+four_rows/interleave/alternate/edge_pair=0. Quiet progress enabled. Before
+capture, losslessly compress the already archived quiet1000 raw log after
+checking its SHA-256; gzip integrity succeeds and /tmp free space rises from
+2500KiB to6144KiB. Capture only new kernel records via dmesg -W.
+
+111 iterations pass. The112th attempted iteration (zero-based111, white) fails;
+result=-5 completed111/requested1000, runner exit1. Stop on first mismatch;
+no remaining iterations run.112 clean black backgrounds,3360 ordered batches,
+16quads/batch and1156 first/776 later bytes. Every command hash matches the
+corresponding red/white edgepair-odd4 reference. All34,406,400 pixels per oracle
+checked: one raw EFB mismatch, one RGB565 mismatch, zero copy-vs-EFB differences.
+At(605,288), expected00ffffff becomes007fffff; expected565ffff, copy7fff.
+All three additional MMIO peeks return007fffff successfully. Red high bit lost
+in EFB and faithfully copied. No logged timeout/stall/Oops/BUG/Call Trace.
+
+Crucially, y288 is the first row of batch18: the one-row leading strip[288,289).
+It is not within an odd-aligned two-row strip. The complete mixed layout is
+therefore not reliable, but this first-failure result does not demonstrate
+failure of its odd-aligned interior strips. Do not discard the alignment lead
+or claim that odd alignment fixes corruption. The run is censored at its first
+error and does not establish a stable failure percentage.
+
+Drawing duration18.113713 seconds. Running-test notice421847.155500 to failure
+421847.451950 is0.296450 seconds; CPU console restored421847.858406. Bar ends
+111/1000. Printk settings restored7 4 1 7; gcn_gx absent; collector stopped.
+Boot remains444193a6-aee4-4ae3-a619-4f6dd90fccf1; installed provider remains
+a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Complete compressed transfer exits0; decompressed SHA-256 matches device:
+703923b16216ec5fbb4ed92d723b5481dc542a4907806b62a70ffd5f8548cde9.
+
+No source/default changes and no further run. Next experiment should isolate
+the one-row edge geometry from the odd-aligned two-row interiors, explicitly
+accounting for any clipping or overlap needed to retain coverage. Preserve
+this edge-localized failure and the matched even-boundary failing control;
+a repeat of the unchanged1000 test is not the next discriminating experiment.
+Evidence manifest:
+`3b4257a66e418d89aca25bd6ed6fa1a8ade10539fc6ab6e974a2635fa42727b8  /media/anolis/dev/wii-gcn-efb-oddrows1000.sha256`.
+
+#### Interior-only odd strips pass short check; original control still fails (2026-09-11)
+
+Add default-off `efb_primitive_interior_only`, requiring odd_rows and excluding
+edge_pair. Replace both one-row edge primitives with zero-area quads at the
+same padding location. Preserve all seven odd-aligned two-row interior strips,
+their submission slots,16quads/batch, and1156 first/776 later command bytes.
+Each batch now leaves its first and last rows black. This deliberately changes
+coverage:268,800 colored interior pixels and38,400 black edge pixels per frame.
+
+The per-row oracle requires black on y%16==0 or15 in this mode, alternating
+red/white on every other row. All307,200 raw EFB and copied RGB565 pixels are
+still checked, including copy-vs-raw differences. First-mismatch logs use the
+actual per-row expected color. A pattern marker records the two pixel counts;
+the usual summary expected field denotes the interior color. Outside this
+mode, the existing full-frame oracle remains unchanged. The checker adds an
+`interior` case. W=1 module build, shell syntax and diff checks pass.
+
+Module SHA-2565a0218fd618a4ec5ff8b2464f9e61d4d99cc18f716e8c5fa65d21944a07f80bc;
+checker SHA-256d9364abd37640a888415825907169fd97c19617dd67bc83686884990f9451e28.
+Run requested4 with primitive/batch/full_width/bands/repeat/pad/two_rows/
+odd_rows/interior_only=1 and four_rows/interleave/alternate/edge_pair=0.
+PASS, runner exit0, completed4/requested4. Four clean black backgrounds,
+120 ordered batches. All1,228,800 pixels per oracle pass, including153,600
+black-edge pixels and1,075,200 colored-interior pixels. No logged kernel faults.
+Pattern marker verified in the complete capture. This remains only a short
+positive control for a reduced-coverage diagnostic, not a full-screen fix.
+
+Because the oracle changed, run the original two-row arrangement on this exact
+build with odd_rows/interior_only=0 (and other permutation flags=0), requested4.
+Red passes; white iteration1 fails, ret=-5 completed1/requested4, runner exit1.
+Two clean backgrounds,60 ordered batches; first30 red records exactly match
+quiet-two4 reference. All614,400 pixels per oracle checked. One raw EFB error,
+zero RGB565 errors and zero copy-vs-EFB differences. At(623,266), expected
+00ffffff becomes00fffffb, confirmed by all three successful MMIO rereads.
+Blue bit0x04 is lost, invisible in RGB565: expected and copied values bothffff.
+The normal checker still detects this raw-only fault and stops immediately.
+No logged timeout/stall/kernel fault. Interior-pattern marker is absent in
+this full-frame control, as expected.
+
+Both collectors stopped; complete compressed downloads exit0 and decompressed
+SHA-256 values match device hashes in cleanup records. Both paths restore
+printk7 4 1 7, unload gcn_gx and restore the CPU console. Boot and installed
+provider unchanged, recorded in interior4 cleanup. Exact new module/source/
+checker and full evidence are archived below. No production/default changes.
+
+Next useful bounded test: up to1000 interior-only iterations on this exact
+build, stopping on first mismatch. This can challenge the odd-aligned interiors
+without the known one-row edge geometry; continue checking black rows so
+out-of-region writes are not ignored. No extended run started here.
+Evidence manifests:
+
+`6ac8fa6bbc49221ec32449dac03925c912719e73de88eef163a8904bd16a12f7  /media/anolis/dev/wii-gcn-efb-interior4.sha256`.
+
+`7d7f241d9c79139336ad06db0ca583179e1139fc2ae1c10fbcc0572070ecd6ae  /media/anolis/dev/wii-gcn-efb-interior-two4.sha256`.
+
+#### Interior-only odd strips pass 1000 iterations (2026-09-11)
+
+Run exact interior4 module5a0218fd618a4ec5ff8b2464f9e61d4d99cc18f716e8c5fa65d21944a07f80bc
+and checkerd9364abd37640a888415825907169fd97c19617dd67bc83686884990f9451e28,
+checksum-verified by remote reuse, with requested1000 and prerequisite flags
+primitive/batch/full_width/bands/repeat/pad/two_rows/odd_rows/interior_only=1;
+four_rows/interleave/alternate/edge_pair=0. Quiet progress and full dmesg -W
+capture. No source changes. Available /tmp space5692KiB before the run.
+
+All1000 iterations pass:500 red/500 white,1000 clean black backgrounds,
+30,000 ordered batches of16quads each,1156 first/776 later authored bytes.
+Every batch hash matches the appropriate alternating interior4 reference.
+All307,200,000 pixels per oracle pass:268,800,000 colored interiors plus
+38,400,000 intentionally black edges. No raw EFB mismatches, RGB565 mismatches,
+copy-vs-EFB differences, first-error records or logged kernel faults. Pattern
+marker verifies268800 colored/38400 black per frame. Runner exits0, checker
+PASS, result completed1000/requested1000, bar reaches1000/1000.
+
+Drawing duration163.138779 seconds (about2m43s). Running-test notice423499.693957
+to PASS423499.994522 is0.300565 seconds; CPU console restored423500.395313.
+Printk restored7 4 1 7, gcn_gx absent, collector stopped. Boot remains
+444193a6-aee4-4ae3-a619-4f6dd90fccf1; installed provider remains
+a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+Complete compressed download exits0; decompressed checksum matches device:
+a62e570826226e9a9f82a88a4ddc6da6394e4da92d2b26e1e799eabb7f66a0c9.
+
+This is a clean bounded result for odd-aligned two-row interiors without
+one-row edge primitives. It is not a full-screen solution, since60 rows remain
+black, and not proof of an error-free future run. It strengthens the motivation
+for a matched interior-only alignment control: move the same seven two-row
+strips up one row per batch (starts0,2,...,12 instead of1,3,...,13), leave the
+last two rows black instead of first/last, retain the same padding slots and
+pixel counts, and update the oracle accordingly. This removes one-row drawing
+from both sides of the comparison. Start with four iterations and first-error
+stopping; no such run has started here. No production/default changes.
+Evidence manifest:
+`101a0d1ac065bcb2358951b4c22d32c21063772b52531904f346488457f548ef  /media/anolis/dev/wii-gcn-efb-interior1000.sha256`.
+
+#### Even interior alignment fails; paired odd interior remains clean (2026-09-12)
+
+Add default-off interior_even requiring interior_only. Shift the same seven
+interior strips up one row per batch; preserve padding slots, quad count,
+heights and colored-pixel count. Oracle expects black at offsets14,15 instead
+of0,15. Pattern log includes interior_even. Build W=1, shell syntax and diff
+checks pass. Modulec2f95f0d2d511958823845b77c444f5a847f0015beb7d3ef821913701594d237;
+checkercf3d6880cfa1a53016823bc66441c9d32fe7998312f0092086f913ffa8865cbb.
+
+Even interior requested4: red passes, white iteration1 fails; completed1,
+runner exit1. Two clean backgrounds,60 ordered batches,614400 pixels per oracle.
+Two raw errors, one RGB565 error, zero copy-vs-EFB differences. First(587,282)
+expected00ffffff becomes00feffff, all three peeks agree; RGB565 masks this first
+red-LSB error (ffff remainsffff). Second error location not logged. No kernel
+faults. Same-build odd interior requested4: PASS4/4,120 batches exactly match
+interior4 reference, all1228800 pixels per oracle clean, no kernel faults.
+
+Both downloads complete and checksum-verify; modules absent and printk restored
+7 4 1 7, CPU consoles restored. This strengthens the interior-alignment lead
+without one-row primitives on either side, but does not establish a mechanism
+or production workaround. No further individual experiment: user requested a
+single automated matrix sweep. Paired evidence manifests:
+
+`52ab5b5380e06cdcc028efc9a0d5c1e1a25f2a63d92db8855077be3a6f14bae6  /media/anolis/dev/wii-gcn-efb-interior-even4.sha256`.
+
+`cae9dadd9152d93aa457790d2ec5e52b18fed8554f7d62a43534a7e71355fb38  /media/anolis/dev/wii-gcn-efb-interior-even-odd4.sha256`.
+
+### Automated EFB matrix suite (2026-09-12)
+
+At the user's request, replace repeated manual case selection with
+`tools/wii-gcn-efb-matrix.py`; usage in `docs/wii-gcn-efb-matrix.md`. The suite
+runs17 curated geometry cases in one sweep, default4 iterations per case,
+with --cases selection and a configurable1..1000 per-case ceiling. All-case
+extended mode can attempt17000 iterations, so the guide explicitly distinguishes
+per-case and suite totals. Each hardware case stops on its first mismatch;
+verified pixel FAILs continue to later cases, while transport/capture/audit/
+cleanup errors stop the suite. Exit0 means all pass,1 means a completed sweep
+with pixel failures,2 means suite error. No population failure rate is inferred.
+
+Output includes host case/iteration progress plus existing Wii progress,
+Markdown/CSV/JSON summaries, before/after boot/module/printk state, exact commands,
+full raw and gzip kernel logs, module/source/harness snapshots, Git provenance,
+and a SHA-256 manifest. Audit checks iteration/color/background records,
+coverage markers, command geometry/count/length, repeated-color hash consistency,
+first-error stopping and cleanup. Downloaded full capture checksums must match
+the device before the suite removes only its own UUID-named remote temporary
+logs. Failed capture/audit retains evidence. A remote lock prevents concurrent
+matrix suites; existing manual tests must not be run concurrently.
+
+Nine audit regression tests using two actual hardware captures pass, covering
+valid PASS/FAIL and missing logs/batches, wrong alignment markers, inconsistent
+client outcomes, missing cleanup and changed repeated-color hashes. CLI dry-run
+lists all17 cases without network access. Shell syntax/build checks for the
+current diagnostic module were already completed. Suite diff whitespace checks
+pass. This work introduces no production renderer/default/provider changes.
+
+First attempted suite invocation hit the local network sandbox before contacting
+the Wii and exited2; its evidence directory is retained separately. Authorized
+SSH retry runs the complete quick sweep at:
+`/media/anolis/dev/wii-gcn-matrix-quick-20260912-run1`.
+Module is exactc2f95f0d2d511958823845b77c444f5a847f0015beb7d3ef821913701594d237.
+The sweep runs from02:44:57 to02:49:24 local time, about4m27s including SSH,
+transfers, per-case setup/cleanup and auditing. Runner exit1 is the documented
+completed-sweep result with pixel failures, not a suite failure.
+
+Results:9 PASS,8 pixel FAIL,0 ERROR. Pass: clear, single-quad, two-quads, bands,
+repeat-bands, padded-bands, four-rows, odd-rows, interior. Fail: split-rows,
+batched-split, one-row, two-rows, interleaved, alternate, edge-pair, interior-even.
+46 iterations actually checked (ceiling68),999 primitive draw submissions.
+All17 captures audit successfully; each case restores printk and unloads gcn_gx,
+boot unchanged; suite lock cleanup succeeds. Final evidence manifest verifies
+all files, SHA256SUMS SHA-256:
+`ca44d6469a60d6668ec9591459174baea8975bae4bbcd9846b3c50f3f19ce8f0`.
+The canonical table is `summary.md`, with machine-readable `summary.csv` and
+`summary.json`; first pixels, raw versus RGB565 mismatch counts, completed counts
+and device test durations are retained. These short passes do not supersede the
+previous longer mixed odd-rows failure at its one-row edge.
+
+Use this suite for subsequent sweeps rather than issuing each case manually.
+No extended sweep was started: the first validation used the stated quick
+four-iteration default. Future depth/case selection is explicit in one command.
+
+### Extended complete matrix: 8 pass, 9 fail (2026-09-12)
+
+User authorized a long full sweep while away. After checking no interrupted
+runner or collector was active, losslessly compress three previously archived
+logs, verify gzip integrity, and increase /tmp free space1996->6732KiB. Run all
+17 cases on exact modulec2f95f0d2d511958823845b77c444f5a847f0015beb7d3ef821913701594d237,
+1000 iterations per case, runner timeout1800s, first-pixel-failure stopping.
+No source/default changes during the sweep. Suite starts02:54:13 and ends03:20:14
+local time:26m01s, including transfers and audit. Summed device test time
+1202.816633s. Exit1 means completed sweep with verified pixel failures, not an
+infrastructure error. All17 cases processed; zero suite errors.
+
+1000-pass cases: clear, single-quad, two-quads, bands, repeat-bands,
+padded-bands, four-rows, interior. Fail cases and clean iteration counts:
+split-rows0, batched-split1, one-row0, two-rows0, interleaved1, alternate1,
+odd-rows16, edge-pair0, interior-even0. In total8028 iterations and152811
+primitive draw submissions,2466201600 pixels checked per oracle. Every capture
+checksum/audit passes, all shared quick/long command hashes match per case/color.
+
+Strongest matched result: odd interior passes1000; even interior fails on first
+red attempt,2 raw errors masked by RGB565. First(31,6), redff->fd, all rereads
+confirm. Mixed odd-rows fails on attempt17 at its one-row batch edge(605,288),
+redff->7f, matching the earlier extended edge location. Thus a short mixed-layout
+pass was insufficient; the isolated alignment lead survives the long sweep.
+This is not a mechanism identification, full-screen fix or native-texture proof.
+
+Final read-only check confirms printk7 4 1 7, boot unchanged, gcn_gx absent,
+matrix lock released, installed provider unchangeda2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09,
+/tmp free6732KiB. Full report and tables:
+`/media/anolis/dev/wii-gcn-matrix-long-20260912/report.md`.
+Enriched evidence manifest SHA-256:2d1aefec360ecc15398817ee0b129473795e15a126558f127ad631734f001c0a.
+Original suite manifest retained as suite-SHA256SUMS; report, final state and
+storage preparation added to the final manifest. User then requested autonomous
+continued testing until a solution is found; no pause for routine case selection.
+
+#### Late depth-comparison location is not sufficient (2026-09-12)
+
+Autonomous follow-up reviewed local libogc gx.c and archived Dolphin sources;
+previous per-row PE fences had already failed, and post-copy pixel-mode sync
+was already installed. Add default-off efb_primitive_late_z (primitive-only):
+append BP43000000 after the standard direct-color state, changing comparison
+location while depth testing/writes stay disabled. Geometry and oracle are
+unchanged; only the first batch gains5 authored bytes. Matrix gains paired
+late-z one-row/two-row/interior-even cases and audits the extra state length.
+
+W=1 build, nine audit regression tests and diff checks pass. Exact module
+0d0660acb904f253fb0b81f7e6d25ea40e1bc7f5ec3f62870d9e16871ce7f555.
+Six-case sweep, max4 each: all six FAIL pixel checks, zero suite errors.
+Completed clean iterations: one-row2, late-z-one-row1, two-rows0,
+late-z-two-rows1, interior-even0, late-z-interior-even0. All logs audited,
+manifest verified, cleanup and lock release normal. Evidence:
+/media/anolis/dev/wii-gcn-matrix-late-z-20260912/summary.md.
+Late comparison location alone is rejected as a sufficient correction.
+
+Next autonomous paired sweep tests Z ALWAYS compare without writes (BP4000000f)
+and with writes (BP4000001f), independently of late_z, across the same three
+failing geometries. Diagnostic-only z_test/z_write flags enforce dependencies;
+normal production state remains unchanged. Source/module archived by the suite.
+
+#### Depth ALWAYS controls rejected; TEV source isolation (2026-09-12)
+
+The nine-case Z-control sweep completed with eight pixel FAILs, one short PASS,
+and zero infrastructure errors. The lone z-test-one-row PASS covered only four
+iterations; both Z variants failed two-rows and interior-even. Depth writes also
+failed one-row. These controls do not provide a general correction.
+Evidence: /media/anolis/dev/wii-gcn-matrix-z-control-20260912/summary.md.
+The full SHA256SUMS manifest verified successfully.
+
+The next default-off diagnostic, efb_primitive_constant, preserves direct vertex
+layout and geometry while sourcing TEV RGB from register C0. Register setup
+matches local libogc GX_SetTevColor(GX_TEVREG0), including three writes of the
+high register: E20FF0FF, E3(green<<12|blue) three times; C008FFF2 selects C0
+instead of raster color. Green/blue alternate 0/255 per iteration as before.
+This adds 25 bytes only to the first batch; the matrix audits that length.
+W=1 build, ten audit tests and diff checks passed before hardware execution.
+
+Constant-color sweep completed: all six paired cases failed pixel checks;
+zero infrastructure errors. Constant one-row completed one clean iteration,
+constant two-rows and interior-even failed their first iteration. The matching
+baselines completed three, zero and zero respectively. Bypassing interpolated
+vertex RGB is not sufficient. Evidence manifest verified:
+/media/anolis/dev/wii-gcn-matrix-constant-20260912/summary.md.
+
+User requested a more time-efficient strategy. Prioritize discriminating the
+strong alignment result over further isolated register toggles. Next proposed
+paired control: identical two-row output coverage produced by native two-row
+quads versus taller quads clipped to those rows, with matched scissor commands
+and submissions in both arms. This separates submitted primitive extent from
+written pixel coverage, subject to clipping's effects on internal scheduling.
+Use repeated short paired runs for mechanism screening; reserve long sweeps for
+candidates that survive failing geometries. First-error locations are censored
+samples, not complete spatial maps or unbiased failure-rate measurements.
+
+#### Matched scissor/primitive-height experiment (2026-09-12)
+
+Add primitive-only scissor_rows and dependent tall_rows diagnostics. Both arms
+retain eight zero-area pads followed by eight visible quads per 16-row batch.
+The pads use one primitive header; each visible quad has its own header and
+identical two-row scissor, followed by full-scissor restoration. The short arm
+uses y..y+2 vertices; the tall arm uses batch-first..batch-end (16 rows). Both
+must produce the same complete red/white image from verified black background.
+They submit the same 30 batches, 16 quads/batch, and 114 extra authored bytes
+per batch (24 header bytes plus 90 scissor bytes). Full raw/copy oracles remain.
+Parameter dependencies exclude alternate/interleaved/odd geometries. Driver W=1
+build and ten audit tests pass. Start with baseline and matched arms at eight
+iterations each; repeat in reverse order before attributing a difference.
+A difference would implicate submitted geometry or its raster scheduling,
+not prove a specific silicon mechanism. A shared pass could instead be caused
+by scissor writes or separate primitive headers and needs further separation.
+
+Matched-scissor module SHA256:
+6de2aa1dd9e20f4fe35f02cfae8ddbb19016db6c7886f5434d639a167fbb9942.
+Round1 max8: original two-rows FAIL0, scissor-two-rows FAIL0,
+scissor-tall-rows PASS8. Reverse order round2 max16: tall PASS16,
+scissor-two-rows FAIL3, original FAIL0. Numbers after FAIL denote clean
+iterations before the mismatch. Both rounds completed with zero infrastructure
+errors and verified SHA256SUMS. Evidence directories:
+/media/anolis/dev/wii-gcn-matrix-scissor-20260912-r1
+/media/anolis/dev/wii-gcn-matrix-scissor-20260912-r2
+An actual tall-pass fixture now tests acceptance and rejection of missing
+per-batch scissor/header bytes; eleven audit tests pass. Proceed to1000 tall
+iterations with the matched short control afterward, same exact module.
+
+Extended scissor result REJECTS tall clipping as a sufficient correction:
+tall failed iteration15 after15 clean frames, (605,288), white00ffffff to
+007fffff, copy7fff, all three extra peeks confirm; short failed after3 clean.
+Both cases audited, no infrastructure error, manifest verified. Tall's earlier
+8/16 passes cannot support a fix claim. Evidence:
+/media/anolis/dev/wii-gcn-matrix-scissor-20260912-long.
+
+Across saved matrix summaries, multiple first-fault coordinates repeat with
+the same missing red bit despite different geometry/state cases. Examples:
+605,288 red bit7; 587,282 bit0; 31,6 bit1; 586,398 bit6. This is censored
+first-fault evidence and does NOT establish a silicon defect. Saved aggregation:
+/media/anolis/dev/wii-gcn-scratch/recurrent-first-pixels-20260912.json.
+
+Next path-isolation control adds default-off primitive_cpu_write. From verified
+black background, fill all307200 pixels via physical0x08000000 color aperture,
+y<<12/x<<2 and big-endian ARGB stores (local libogc GX_PokeARGB mapping).
+Save/restore CPU PE poke regs0..3; set Z disabled000e, color/alpha writes0018,
+no destination alpha0000, alpha ALWAYS0700. Ordered final pixel read precedes
+restoration. No primitive commands submitted. Existing full raw and GPU-copy
+oracles check alternating red/white. Matrix requires a CPU-fill record for each
+iteration and no primitive records; checker verifies the mode parameter.
+W=1 build and eleven audit tests pass. Initial max8 clear/cpu-write/two-rows
+triplet verifies this control before drawing conclusions about either path.
+
+CPU short triplet completed: clear PASS8, cpu-write PASS8, two-rows FAIL0
+with4 raw/3 copy mismatches. Evidence manifest verified. CPU1000 comparison
+then launched using the same archived CPU module; no concurrent hardware test.
+The next default-off batch_snapshot measurement is prepared independently:
+after each fenced16-row batch scan the entire EFB, expecting draw color before
+end and black afterward. Save each batch count and its first bad pixel. Retain
+the normal final raw/copy scans; any intermediate mismatch also fails the
+iteration even if later work repairs it. The auditor requires all30 ordered
+snapshot records and accounts for observed faults separately from final pixel
+counts. Restrict mode to simple full-coverage two-row geometry. Full scans
+alter timing, so pair with the baseline and interpret absence cautiously.
+
+CPU extended result: PASS1000, zero raw/copy/copy-vs-raw differences across
+307200000 pixel checks per oracle. Subsequent two-rows FAIL0 with1 raw/1 copy
+error. Entire suite audited and SHA256SUMS verified. This argues against a
+permanently stuck color bit; it does not exclude access-pattern-sensitive
+hardware faults, and is not a rendering correction. Evidence:
+/media/anolis/dev/wii-gcn-matrix-cpu-write-20260912-long/summary.md.
+CPU module91ea53e7e525f644e2730fd75ed9d306086cb7316cd502b566427be5a41ebbe2.
+Prepared batch-snapshot moduleaad585800f41f387cc4ec6f66696c7d734a96747dd5d3f8bd30b3899abdce650;
+launched paired max4 baseline/snapshot cases. Twelve audit tests pass, including
+actual CPU-pass fixture that rejects absent CPU-fill records.
+
+Batch-snapshot r1: baseline FAIL2; snapshot FAIL1 with8 raw/5 copy errors.
+First observed error was (47,2), white00ffffff->00fdffff, immediately after
+batch0; it persisted through all30 observations. Capture verified. Added a
+307200-byte diagnostic-only seen bitmap to log first appearance of up to64
+bad pixels per frame, classifying past/current/future relative to the just-drawn
+batch. Reverse-order followup snapshot FAIL0 at batch20 (rows320..335),
+(602,334), red00ff0000->007f0000, region=current. Baseline then FAIL0.
+Both cases audited and manifest verified. Evidence:
+/media/anolis/dev/wii-gcn-matrix-batch-snapshot-20260912-r1
+/media/anolis/dev/wii-gcn-matrix-batch-new-20260912-r1
+The two localized failures exist in the current batch before final copying;
+this does not prove all faults share that origin. Thirteen audit tests pass.
+
+#### Overlapping coverage candidate, matched extended viewport (2026-09-12)
+
+Because scissored tall quads still fail, next test keeps the larger written
+footprint: extend each even two-row strip to four rows, ordered top-to-bottom.
+Subsequent strips overwrite overlap. Both candidate and matched short control
+use640x528 viewport/projection and scissor, avoiding two-row clipping at the
+visible bottom edge; only640x480 is copied and checked. This is diagnostic
+only: it intentionally writes two extra rows outside the visible test image.
+Original viewport two-rows is the third control. Same30 batches,16 quads,
+8 pads, first1156/later776 bytes. Full uniform red/white oracle is unchanged.
+If promising, patterned strip colors are required to validate overwrite order;
+a uniform fill alone does not demonstrate preservation of differing content.
+Default-off extended_viewport/overlap_rows enforce dependencies and exclude
+incompatible geometries/snapshots. W=1 and thirteen audit tests pass.
+
+Overlap first triplet: original two-rows FAIL0 (6 raw/6 copy), extended
+viewport two-rows FAIL0 (1/1), overlap PASS8. Manifest verified:
+/media/anolis/dev/wii-gcn-matrix-overlap-20260912-r1.
+Before long validation, add stripe_colors requiring extended viewport and
+excluding constant TEV. Alternate red/white every two rows, flip phase every
+iteration. Emit each strip's corresponding vertex color; independent final
+per-row oracle checks exact expected RGB and RGB565. Marker identifies pattern.
+Run max16 overlap then extended control, followed by patterned overlap then
+patterned control, same new module; no result claimed before completion.
+
+Two-row overlap extended sweep completed: striped overlap PASS1000 and uniform
+overlap PASS1000, all raw/copy/copy-difference counts zero. Matched striped
+short control FAIL0 (2 raw/2 copy); uniform short control FAIL1 (13/5).
+No infrastructure errors; full manifest verified. Evidence:
+/media/anolis/dev/wii-gcn-matrix-striped-overlap-20260912-long/summary.md.
+This validates a bounded overlap rendering candidate, not general integration.
+Prepared one-row variants retaining16 quads/batch without pads; thin extent1,
+overlap extent4, both same528-row viewport. Striped colors alternate each row
+and flip every iteration. Oracle and marker use declared one-row period.
+W=1 and fourteen audit tests pass. Next max16 one-row control/candidate pairs.
+
+One-row sweep rejects overlap as general solution: striped thin FAIL1,
+striped overlap FAIL7 (95,302 white->007fffff, copy7fff), uniform thin FAIL3,
+uniform overlap FAIL3. All audited; manifest verified. Evidence:
+/media/anolis/dev/wii-gcn-matrix-one-overlap-20260912-r1.
+
+#### Native 1:1 single textured quad candidate (2026-09-12)
+
+Exact native trace gate already guarantees source/destination rectangle320x240
+at matching quadrant origin in640x480 linear surfaces. The generic final
+scaler currently emits240 one-row runs (480 quads with horizontal splitting).
+Add default-off scale_native_single_quad effective only at this gate. Preserve
+crop/horizontal/preservation/state-fence stages unchanged; replace final runs
+with one320x240 textured quad. Use existing negative-quarter semantic UV phase
+from0 through320/512 horizontally and240/256 vertically, retaining the active
+rectangle scissor and original viewport. No overdraw or CPU pixel correction.
+Final trace reports1 quad/88 bytes versus480/38408; retain split flag to denote
+the requested existing split control. Source and destination extent equality
+is guaranteed by the gate, not inferred from general scaler requests.
+
+Matrix adds native-single/native-baseline with the existing verified client
+4352cccc29db0c282863f71860e9080df0d668f3aa2d7015011a1b9d6162db7e.
+Iterations mean frames; each has4 rectangles. Preserve all3 native stage and
+all3 prior records per sequence, state records, command counts/hashes and
+client full-frame oracle. Runner adds --quiet-kernel with EXIT restoration;
+host progress parses client offscreen frame notices. Native audit rejects
+incomplete captures/unexplained failures and verifies one-quad command length.
+Begin max4 frames candidate then baseline, using the same new module.
+
+Native single-quad short result: candidate PASS4 frames/16 rectangles, baseline
+PASS4. All stage/prior/command/state records and client oracle verified; final
+candidate commands1 quad/88 bytes. Entire capture manifests verified. Added
+actual native fixture checking missing client PASS, wrong geometry and absent
+prior records; fifteen audit tests pass. Evidence:
+/media/anolis/dev/wii-gcn-matrix-native-single-20260912-r1.
+
+The first1000-frame launch stopped at storage preflight (no client test),
+need6102KiB/have5960. Losslessly compressed older
+/tmp/gcn-native-idle-off-1000-kernel.txt, archived the compressed copy locally,
+verified decompressed SHA256f987eccbc6ca8f9e13088c4f37ef9175940eda11ebb03723d2baca730c7dbdfa
+on both copies, then removed only redundant uncompressed remote data. Free
+space8004KiB. Host archive:
+/media/anolis/dev/wii-gcn-scratch/archived-native-idle-off-1000-kernel.txt.gz.
+The transfer was slow but completed and verified; boot/printk unchanged.
+Restarted1000 frames/4000 rectangles, timeout3600s, exact same module/client:
+/media/anolis/dev/wii-gcn-matrix-native-single-20260912-long-r2.
+Do not treat the preflight ERROR directory as a rendering failure.
+
+While native-single1000 runs unchanged, prepare default-off scale_identity_quad
+for normal 1:1 operation. Its predicate is equal source/destination rectangle
+extents, independent of native tracing or specific quadrant coordinates. It
+uses a single textured quad in both horizontal and final scaler stages with
+the existing semantic negative-quarter UV phase, keeping source cropping,
+destination preservation, copying and synchronization structure. Non-identity
+scales retain their previous run geometry. This is a separate candidate, not
+promotion of the still-running tested binary. Archive:
+/media/anolis/dev/wii-gcn-identity-quad-module.ko
+SHA256a7897074a96a54f718c90a44e49c0d5d92a1fead3e4506cb5cdb6b146a499f70.
+Original native-single1000 module remains
+85dcdf81dbf45f842b8ee2837584826bead1afb7b74a7aa4cfbf7830a2d53f51.
+
+Matrix prepares native-identity (full stage audit, both commands1 quad) and
+native-identity-production (no diagnostic trace; full client RGB565 oracle).
+Production-mode result does not claim an EFB sample count. New strict clients
+built with -Wall -Wextra -Werror using current exported headers, archived under
+/media/anolis/dev/wii-gcn-native-final-clients. No concurrent hardware run.
+
+Native-single1000 completed PASS, all4000 sequences,12000 stage records,
+12000 prior records,8000 command records and4000 state records audited.
+Client checked307200000 pixels. All native mismatch counts zero at RGB565
+precision; complete manifest verified. No kernel/cleanup/infrastructure error.
+Evidence: /media/anolis/dev/wii-gcn-matrix-native-single-20260912-long-r2.
+
+Compared all5 (horizontal/final, split, quads, bytes, hash) command variants in
+the same-build native-baseline4 capture against the archived historical
+native-idle-off1000 failure: sets match exactly. Historical capture ends at
+sequence1224 (306 frames) and contains a final-stage missing-red-bit error.
+This is historical negative-control evidence, not a new failure-rate estimate.
+The current baseline4 short pass does not negate the reproduced old failure.
+
+Launched identity-quad candidate max16 traced frames then16 normal-operation
+frames with the freshly rebuilt client. Each normal frame retains the full
+client RGB565 comparison; no unmeasured raw-EFB correctness claim is made.
+
+Identity implementation passed16 traced +16 normal frames. Then normal mode
+passed1000/1000 frames without diagnostic tracing/extra EFB snapshots, checking
+307200000 client pixels. Complete render UAPI regression PASS (all capability,
+allocation, primitive, texture, depth, system and scaling checks). Both complete
+manifests verified. Evidence production1000 and regression directories listed
+in docs/wii-gcn-fault-investigation-2026-09-12.md.
+
+Enable scale_identity_quad=true by default; no other behavior switches promoted.
+Identity copies now use single textured quads in both scaler stages, independent
+of diagnostic native gating. Source cropping and destination preservation remain.
+Runner adds --expect-param and verifies live scale_identity_quad=Y before final
+native/default and full-regression tests, with no enabling module argument.
+This is a scaler correction; arbitrary thin-primitive diagnostics remain an
+unresolved hardware/path investigation, not claimed repaired by the optimization.
+
+Final default build validation completed: live scale_identity_quad=Y verified
+without an enabling argument; 16/16 native frames and the full render UAPI suite
+passed. Final evidence manifest verified in
+/media/anolis/dev/wii-gcn-matrix-identity-default-20260912-final.
+Module SHA256: e4b9b7aeb5646107e12c6a9b6f8cd8cddf235cce914a1232cbe166a6615390c1.
+The build module and /media/anolis/dev/wii-gcn-identity-default-module.ko match.
+Final cleanup check: module unloaded, matrix lock released, CPU console restored,
+boot ID and printk level unchanged; installed provider SHA256 remains
+ a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09.
+No hardware tests remain running. Scoped results and limitations are recorded in
+docs/wii-gcn-fault-investigation-2026-09-12.md.
+
+#### White-background discrimination (2026-09-12)
+
+Continue the remaining thin-primitive investigation with a matched two-row
+pair: normal verified black background versus verified white background.
+The default-off efb_primitive_white_background flag only changes the initial
+clear and its full RGB24 background oracle. Draw geometry, emitted colors,
+submission structure and final red/white oracle remain identical. Missing red
+bits after a verified white clear cannot be explained by simply leaving those
+pixels undrawn. A pass is not a correction: expected white already matches the
+background. Restrict the mode to two-row geometries without partial coverage,
+batch snapshots, stripe colors or extended viewport. W=1 build and all 18
+existing audit tests pass. Paired ceiling: 16 iterations per case; first-error
+stopping retained. Evidence: wii-gcn-matrix-white-background-20260912-r1.
+
+White-background r1/r2 completed with no infrastructure errors. Black controls
+failed after 0 and 2 successful iterations. White background failed after 5
+and 8: white-to-white at (638,263) became ffdfff, then red-over-white at
+(607,343) became df0000. Every initial background pixel had passed; all three
+repeat reads retained each discrepancy, and RGB565 copy reproduced it. Thus
+simple missed coverage cannot explain these observations. Both manifests
+verified; 19 audit regression checks pass. No generic hardware/state diagnosis
+or correction is claimed. Diagnostic module SHA256:
+72cef8d3a51efd590c7ead2ab60fa74cdca332e5a0a1c45eb98be16a0dbf34aa
+Archive: /media/anolis/dev/wii-gcn-white-background-module.ko.
+The validated default scaler module remains separately archived as
+/media/anolis/dev/wii-gcn-identity-default-module.ko (e4b9b7ae...).
+
+#### Color-write-mask discrimination (2026-09-12)
+
+Add default-off efb_primitive_no_color_write, requiring white_background.
+Append BP 0x41003100 (color/alpha update off) after normal vertex color state.
+Geometry, alternating vertex colors, batches, waits and background scans remain
+unchanged; final oracle now requires preserved white every iteration. The audit
+checks the mask marker, white background marker, all-white result expectations,
+extra five state bytes and color-dependent command hash stability. W=1 build,
+19 existing audit tests and diff checks pass. Start paired max16 write-enabled
+and masked cases in wii-gcn-matrix-masked-write-20260912-r1. This is a localization
+control, not a correctness workaround; hardware may bypass upstream work when
+all framebuffer writes are disabled.
+
+Masked-write pairs completed: write-enabled controls failed after 2 and 10
+successful iterations. Both masked runs failed on their first iteration:
+r1 raw/copy 2/2, first (62,2) ffffff -> fffff7; r2 raw/copy 3/2, first
+(331,146) ffffff -> fffeff. Verified white backgrounds, persistent triple
+reads, complete audited records and manifests. No infrastructure errors.
+The bulk red draw correctly leaves white with masking, but isolated corruption
+persists. Disabling color writes is not sufficient; no physical cause claimed.
+All 20 audit tests pass. Module archive wii-gcn-masked-write-module.ko SHA256:
+70b1d44a18a40ae14b00842f5c77cd48491a0c2c5fecf660fa2b3e1b238d3096.
+Detailed evidence and interpretation are in the fault investigation report.
+
+#### Early depth rejection and state-only controls (2026-09-12)
+
+Continue localization after masked-write failures. Default-off z_never requires
+white_background and excludes alternate depth settings, masking and state-only.
+BP 0x40000001 enables NEVER depth comparison, disables depth writes and retains
+early Z from normal BP 0x43000040. Expected output is preserved white, while
+vertices retain red/white phase. Default-off no_draw omits primitive headers
+and vertices but retains normal setup and all 30 completion submissions.
+Audit requires mode markers, full-white result oracle and exact command counts/
+lengths (state-only first385/later5, depth-rejected first1161/later776).
+W=1 build, 20 existing audit tests and diff checks pass. First triplet ceiling
+16 each: state-only, z-never-two-rows, white-background-two-rows. Evidence:
+wii-gcn-matrix-reject-depth-20260912-r1. These are localization controls, not
+rendering corrections; no hardware interpretation claimed before results.
+
+Initial triplet complete: state-only PASS16, early NEVER PASS16, normal draw
+FAIL0 (607,343 red ff -> df; one raw/one copy error). Full manifest verified.
+22 audit regression checks pass, including real state-only and depth-rejection
+captures with missing marker/wrong command length/geometry rejection checks.
+Start unchanged-module extended ceiling1000 per case in reverse control order:
+z-never-two-rows, state-only, white-background-two-rows. First-error stopping
+retained; evidence wii-gcn-matrix-reject-depth-20260912-long.
+Archive /media/anolis/dev/wii-gcn-reject-depth-module.ko SHA256:
+7dfedfa5866d65c1ac28cd5e01e784404d1c7e06b6bbb6764efe893c528953a9.
+
+Extended rejection sweep complete: early NEVER PASS1000 (163.21s), state-only
+PASS1000 (160.98s), each 307200000 pixels per oracle and 30000 submissions.
+Normal control failed after one successful iteration, white-to-white at
+(602,355) ffffff -> ffffef; all three rereads and RGB565 copy confirm it.
+Both complete evidence manifests verified. These controls narrow attention to
+work suppressed by early rejection; they do not identify a physical stage or
+provide a general rendering correction. 22 audit tests and diff checks pass.
+See final fault-investigation report for complete interpretation and archives.
+
+#### Late versus early depth rejection (2026-09-12)
+
+Permit existing late_z with z_never (still reject it with state-only). This
+adds BP 0x43000000 after depth NEVER instead of retaining early BP 0x43000040.
+Depth updates remain off; color writes remain enabled; final oracle requires
+verified white to survive unchanged. Dynamic early=0/1 marker and exact
+first-batch lengths 1166/1161 are audited. No other geometry/default changes.
+W=1, 22 audit tests and diff checks pass. Start max16 late rejection, early
+rejection and normal draws in wii-gcn-matrix-late-reject-20260912-r1. The two
+NEVER cases are preservation controls, not rendering corrections.
+
+Late-rejection initial triplet: late NEVER FAIL0 (3 raw/2 copy errors), early
+NEVER PASS16, normal draws FAIL0 (1/1). First late discrepancy (75,334),
+ffffff -> dfffff, persists in all three rereads and RGB565 copy dfff. Both
+NEVER arms otherwise preserve the verified white background; early/late markers
+and command sizes audited. Manifest verified. Added actual failure fixture;
+23 audit regression checks pass. Repeat unchanged binary in reverse order,
+early then late max16, in wii-gcn-matrix-late-reject-20260912-r2.
+Module archive /media/anolis/dev/wii-gcn-late-reject-module.ko SHA256:
+728becb7461dd026dedecb09949b66ea418ba3f9412d89781583bf5e2606af66.
+
+Reverse-order repeat complete: early NEVER PASS16, late NEVER FAIL after four
+successful iterations (5 raw/3 copy errors). First (530,54) ffffff -> ffff7f,
+all rereads and RGB565 ffef agree; verified background passed. Both manifests
+verified. This replicates early-versus-late divergence, alongside the earlier
+1000-iteration early pass. It focuses attention on work/scheduling suppressed
+by early rejection without uniquely identifying a physical stage. No rendering
+fix claimed. 23 audit tests pass; full details in the investigation report.
+
+#### Alpha rejection with late timing (2026-09-12)
+
+Add default-off alpha_never, requiring verified white and late_z. Exclude depth
+NEVER, state-only, masking, depth-test overrides, constant color and scissor-row
+experiments. BP 0xf3000000 sets both alpha compares NEVER with AND, and existing
+late_z sets BP 0x43000000. Depth testing stays disabled; color writes enabled.
+Final oracle requires preserved white. Alpha/late-depth cases both first1166/
+later776 bytes but differ in discard mechanism; no identical-state claim.
+W=1 build, 23 audit checks and diff checks pass. Start max16 each alpha rejection,
+late depth rejection and early depth rejection in
+wii-gcn-matrix-alpha-reject-20260912-r1. No defaults promoted.
+
+Alpha-rejection short sweep: alpha NEVER PASS16, late depth NEVER FAIL0 (2 raw/
+2 copy errors, first530,54 ffffff -> ffff7f), early depth NEVER PASS16.
+Full manifest verified; 24 audit tests pass, including real alpha-pass fixture
+with missing mode/state bytes/wrong output-oracle rejection. Launch unchanged
+module max1000 alpha rejection then late-depth control in
+wii-gcn-matrix-alpha-reject-20260912-long. First-error stopping retained.
+Module archive /media/anolis/dev/wii-gcn-alpha-reject-module.ko SHA256:
+d0a8d65400343ec2cc6e2f04999b90b3c237e588bcb09a7e2115748a14767014.
+
+Alpha extended validation completed PASS1000, zero raw/copy errors across
+307200000 pixels per oracle, 30000 draw submissions, 162.11s. Late-depth
+control then failed after one successful iteration: 3 raw/2 copy errors,
+first547,2 ffffff -> fffff7; all rereads and RGB565 fffe agree, background clean.
+Both manifests verified; 24 audit tests and diff checks pass. Alpha rejection
+therefore differs from late depth rejection in this tested state, but discard
+paths may alter upstream work and scheduling. No physical-stage diagnosis or
+general rendering correction claimed. Full interpretation in investigation
+report; installed provider and validated scaler archive unchanged.
+
+#### Alpha threshold comparison (2026-09-12)
+
+Add default-off alpha_threshold (LESS128) and dependent alpha_threshold_pass
+(GEQUAL128). Existing direct color emitter writes alpha255 for every vertex.
+Both modes require white background and late timing, exclude other rejection
+or masking modes, and use comp1 ALWAYS/AND. BP F3 words f3390080/f33e0080;
+first1166/later776 bytes in both. LESS oracle preserves white, GEQUAL oracle
+requires intended red/white. Audit checks exact marker, output phase and bytes.
+W=1, 24 existing audit tests and diff checks pass. Max16 GEQUAL, LESS and NEVER
+cases launched in wii-gcn-matrix-alpha-threshold-20260912-r1. Diagnostic only.
+
+Threshold short sweep: GEQUAL failed after 2 successful iterations, LESS PASS16,
+NEVER PASS16. GEQUAL first55,14 expectedff0000 rawff0008, RGB565 f801, all
+three rereads agree. This includes an unexpected set blue bit, not only missing
+bits. Entire capture manifest verified. Extend unchanged module LESS then GEQUAL
+max1000 in wii-gcn-matrix-alpha-threshold-20260912-long. Added real reject/accept
+fixtures checking distinct mode/oracle/state-byte evidence; no rate inferred.
+Archive wii-gcn-alpha-threshold-module.ko SHA256:
+58107cd1ecca13ebc2215c0fd4abf38d062a1d0e98dddc5aada052b372d36dd0.
+
+Threshold extended sweep complete: LESS PASS1000, 307200000 pixels per oracle,
+30000 draw submissions, 161.87s. GEQUAL failed after three successful iterations,
+first633,472 ffffff -> 7fffff, RGB5657fff; all rereads agree and background clean.
+The preceding short GEQUAL also showed a set blue bit (ff0000 -> ff0008), so
+faults are not exclusively cleared bits. Both manifests verified; 25 audit
+tests and diff checks pass. Ordinary threshold discard reproduces the NEVER
+pass, without proving identical internal execution or providing a rendering
+fix. Next useful discriminator: fixed comparator with mixed per-strip alpha,
+checking accepted and rejected regions separately in the same batches; not yet
+implemented or run. Details and module archive in the investigation report.
+
+#### Mixed accepted/rejected strips (2026-09-12)
+
+Add default-off alpha_mixed requiring the GEQUAL128 threshold mode; dependent
+alpha_mixed_reverse flips initial strip parity. Extend the rect emitter with
+explicit alpha and retain the existing wrapper with alpha255 for all other
+callers. Only the diagnostic two-row loop varies alpha: ((row/2 + iteration/2
++ reverse)&1) selects alpha0/rejection, otherwise alpha255/acceptance. Full
+oracle preserves white in rejected rows and checks red/white in accepted rows.
+Each partition contains153600 pixels. Per-iteration raw/copy partition counts
+must sum to full-oracle totals; hash period is4 instead of2. Markers record
+mixed alpha0-255, strip size, reverse phase and coverage. Command lengths stay
+first1166/later776. W=1, 25 existing audit tests and diff checks pass. Start
+max16 mixed, reverse mixed, all-accept and all-reject cases in
+wii-gcn-matrix-alpha-mixed-20260912-r1. No production defaults promoted.
+
+Mixed short suite complete: normal mixed FAIL after7 successful iterations,
+reverse mixed FAIL after4. Each has one raw red-LSB error confined to accepted
+pixels and zero rejected/raw-copy errors; RGB565 masks both. First normal
+(547,154) whiteffffff -> feffff; reverse (46,107) redff0000 -> fe0000.
+Every rejected pixel remains exact in both captures. All-accept control FAIL1,
+all-reject PASS16. Complete manifest verified; 26 audit tests pass including
+mixed phase, alpha marker, partition count and sum rejection fixtures.
+Repeat unchanged module reverse/normal max16 in wii-gcn-matrix-alpha-mixed-20260912-r2.
+Archive wii-gcn-alpha-mixed-module.ko SHA256:
+c8ca6f801d3304d75c484bffb56d4e51191b4845b10e338f638f76da6c2145af.
+
+Mixed reverse-order repeat: reverse FAIL1 at575,94 ffffff -> f7ffff; normal
+FAIL0 at541,241 ff0000 -> ef0000. Each has one accepted raw/copy error and
+zero rejected errors; all rereads agree. Across four mixed runs every observed
+error lies in accepted strips; rejected pixels remain exact despite shared
+batches. Both manifests verified, 26 audit tests and diff checks pass. This
+supports accepted-fragment association without claiming a unique physical
+stage, universal isolation or a general fix. Full partition results and module
+archive recorded in fault-investigation report. Installed provider unchanged.
+
+#### Final logic output control (2026-09-12)
+
+Add default-off logic and dependent logic_set, requiring all-accept GEQUAL128
+and excluding mixed alpha. COPY/SET BP words4100311a/4100f11a retain color/alpha
+updates and disable blending/dither. Geometry, vertex colors, alpha comparison,
+late timing and command lengths match; final oracle is red/white for COPY and
+white for SET. SET forces output ones independently of fragment/destination
+color. Exact markers and first1171/later776 bytes audited. W=1, 26 audit tests
+and diff checks pass. Max16 COPY, SET and ordinary all-accept cases launched in
+wii-gcn-matrix-logic-output-20260912-r1. No rendering correction claimed.
+
+Logic output r1: COPY FAIL1 (2 raw/2 copy), SET FAIL15 (1 raw/0 copy), ordinary
+all-accept FAIL1 (2/2). SET first547,154 ffffff -> feffff, all rereads agree.
+Reverse-order max64 r2: SET FAIL3, first575,14 ffffff -> fffff7 (1/1); COPY
+FAIL1 at547,154 ffffff -> feffff (1/0). Both manifests verified; 27 audit tests
+pass. White-background preservation alone does not demonstrate active SET
+output, so add default-off logic_black requiring logic mode. Verify black
+background then check SET white or COPY red/white. Background mode records
+actual value, audit expects00000000 for black cases. W=1 and all checks pass.
+Launch max16 SET-black/COPY-black in wii-gcn-matrix-logic-black-20260912-r1.
+
+Black-background logic control complete: SET FAIL0 (4 raw/2 copy), COPY FAIL1
+(4/1). SET actively writes correct white to307196/307200 previously verified
+black pixels with red vertex input; first530,54 ffffff -> ffff7f, all rereads
+and RGB565ffef agree. Thus final forced-white output also exhibits corruption.
+All three suite manifests verified; 28 audit tests and diff checks pass.
+This directs investigation toward final output/state handling without uniquely
+identifying hardware or a fix. Current logic-black module archive SHA256:
+a1e4a0cb06133f0266047cb139bdfaae8704221b645e22fdc109d0d865886cc9.
+White-background logic module SHA256:
+255ef708e33325b488e9554363b6ab3a0d6b2ecfa30ff68d1c024941b714258a.
+Full results in investigation report; installed provider and validated scaler
+archive unchanged. No diagnostic default promoted.
+
+#### Destination inversion value control (2026-09-12)
+
+Add default-off logic_invert, requiring logic and excluding SET. BP4100a11a
+selects inverse destination; white/black verified backgrounds must respectively
+become black/white. Geometry, alpha acceptance, late timing and draw command
+lengths are matched. Per-iteration expected output is background XORffffff;
+red/white vertex data still alternate but do not determine logic output.
+W=1, 28 existing audit tests and diff checks pass. Launch max16 white-to-black
+then black-to-white in wii-gcn-matrix-logic-invert-20260912-r1. Every pixel must
+change, so missing writes cannot pass. No production defaults promoted.
+
+Invert short pair both FAIL0. White-to-black:6 raw/5 copy, first529,100
+000000 -> 800000. Black-to-white:13 raw/12 copy, first34,18 ffffff -> 7fffff.
+All triple rereads and visible RGB565 copies agree. All30 first-iteration draw
+command hashes match exactly between the opposite-background arms. Manifest
+verified. Add real inversion fixtures with complementary-oracle and opcode
+rejection checks; repeat reverse order max16 in wii-gcn-matrix-logic-invert-20260912-r2.
+Module archive wii-gcn-logic-invert-module.ko SHA256:
+efabc937557396ab2d3c32c85bba5bb343cd5f3e958c7be1387d75f4d759c40a.
+
+Inversion reverse-order repeat both FAIL0. Black-to-white7 raw/7 copy,
+first35,34 ffffff -> ffefff. White-to-black2/2, first546,170 000000 -> 100000.
+All triple rereads and RGB565 agree; background scans clean. All30 first-draw
+hashes match between arms in each pair. Both manifests verified;29 audit tests
+and diff checks pass. Both output directions exhibit faults; INVERT cannot
+separate faulty destination reads from writes/state handling. No repair or
+physical cause claimed. Full results in investigation report; installed
+provider and validated scaler archive unchanged.
+
+#### Forced-zero versus inverted-zero output (2026-09-12)
+
+Add default-off logic_clear requiring logic, excluding SET/INVERT. BP4100011a
+forces zero color; existing all-accept GEQUAL128 and late timing stay fixed.
+Both CLEAR and INVERT-from-white must change verified white to black; first1171/
+later776 bytes match. Audit requires CLEAR mode and full zero output. W=1,
+29 audit tests and diff checks pass. Max16 CLEAR then INVERT-from-white launched
+in wii-gcn-matrix-logic-clear-20260912-r1. This compares source/destination-
+independent zero output with destination-dependent zero output, not hardware
+EFB copy-clear or a usable rendering correction.
+
+Forced-zero first pair: CLEAR FAIL2 (1 raw/1 copy), first226,474 expected000000
+raw000010, RGB5650002; all rereads agree. INVERT FAIL0 (2/2), first303,178
+000000 -> 000020, RGB5650004. Background scans clean; full manifest verified.
+Add actual CLEAR failure fixture checking opcode/zero oracle. Repeat reverse
+order max16 in wii-gcn-matrix-logic-clear-20260912-r2. Archive SHA256:
+c015f2ad3453ae7a02008dcef3d7b463a15b58aaa498419c3f83b57581d1106d
+/media/anolis/dev/wii-gcn-logic-clear-module.ko.
+
+Forced-zero reverse repeat: INVERT FAIL0 (4 raw/3 copy), first474,110
+000000 -> 010000; CLEAR FAIL1 (1/1), first210,158 000000 -> 000008, RGB5650001.
+All rereads agree and background scans pass. Both manifests verified;30 audit
+tests and diff checks pass. CLEAR and previous SET failures show faults are
+not confined to operations with source/destination color-dependent results.
+This does not rule out hidden reads or uniquely identify hardware versus
+state/output handling. No generic rendering correction found. Final details
+and archive checksum in the investigation report; installed provider unchanged.
+
+#### RGBA6 versus RGB8 storage (2026-09-12)
+
+RGB565 format comparison deferred: libogc GX_SetPixelFmt couples RGB565 to
+multisampling. Use RGBA6/Z24 first to preserve sample mode and depth precision.
+Default-off rgba6 restricted to forced SET/CLEAR logic fixtures with exact
+black/white colors. Copy helper accepts explicit PE sync control internally;
+normal wrapper retains43000040, diagnostic uses43000041. Initial clear, draw
+(late43000001) and readback all retain format1; no hardcoded RGB8 reset in the
+diagnostic copy fence. First1176/later776 bytes, explicit format/precision
+marker audited. W=1,30 audit tests and diff checks pass. Max16 each RGBA6 SET,
+RGB8 SET, RGBA6 CLEAR, RGB8 CLEAR in wii-gcn-matrix-rgba6-20260912-r1.
+No precision reduction promoted as a correction.
+
+RGBA6 first suite all four cases fail. RGBA6 SET FAIL1 (2 raw/2 copy), first34,66
+ffffff -> ffff7d (six-bit blue31 expanded to125). RGB8 SET FAIL1 (4/4).
+RGBA6 CLEAR FAIL4 (1 raw/0 copy), first171,82 000000 -> 000004; RGB8 CLEAR
+FAIL3 (1/1). Background scans correct, triple rereads agree; complete manifest
+verified.31 audit tests pass, including format marker/command length/precision
+fixtures. Repeat RGBA6 CLEAR then SET max16 and run full normal render UAPI suite
+with the same module in wii-gcn-matrix-rgba6-20260912-r2. Normal copy wrapper
+retains RGB8; regression checks the shared-helper refactor. Archive:
+/media/anolis/dev/wii-gcn-rgba6-module.ko SHA256
+ ae9fb17229e60e627a8f1371c03545362ca6e0d944b973a4971640c9e7553f13.
+
+RGBA6 repeat: CLEAR PASS16, SET FAIL0 (3 raw/3 copy), first32,144 ffffff ->
+ffefff, all rereads/RGB565ff7f agree. Normal full render UAPI regression PASS
+with all diagnostic flags off, checking the shared copy-helper refactor.
+Both manifests verified;31 audit tests and diff checks pass. RGBA6 does not
+remove the fault; short clear pass does not negate earlier clear failure.
+Results labeled expanded RGBA6 precision, not full RGB8. No diagnostic default
+promoted; installed provider and validated scaler archive unchanged.
+
+#### Recurrent pixel corpus and focused workload (2026-09-12)
+
+Consolidation of102 verified distinct first-pixel captures finds69 locations;
+19 recur and18 retain the same XOR mask on every recurrence. The exception
+(171,82) spans RGB8 and RGBA6 bit layouts. All result/kernel files used are
+verified against manifests, recorded hashes and actual first records; no
+exclusions/duplicate logs. New reusable tools/wii-gcn-fault-corpus.py writes
+JSON/report/source/checksums; data are censored and not a failure-rate estimate.
+
+Recurrent (530,54) loses blue bit7 across five prior cases. Add default-off
+focus requiring RGB8 SET from black: two8x2 quads at528,52 through536,56.
+One submission/two quads/499 bytes. Full307200-pixel oracle checks32 white
+pixels and307168 black surrounding pixels. Audit checks scope and geometry.
+Short focus PASS16 while full-workload control FAIL0 (5 raw/3 copy), first35,34
+ffffff -> ffefff. Entire suite manifest verified; focused fixture added.
+Extend unchanged module focus then full workload max1000 in
+wii-gcn-matrix-focus-20260912-long. A small-workload pass is not a correction.
+
+Focused extended probe PASS1000,159.24s,307200000 pixels per oracle,32 actively
+written pixels per iteration including recurrent530,54. Full control then
+FAIL0 at605,296 ffffff -> 7fffff (2 raw/2 copy); rereads agree. Both manifests
+verified;32 audit tests and diff checks pass. Final corpus103 unique verified
+captures,69 locations,19 recur/18 stable XOR masks;0 exclusions. Source/report
+archived in wii-gcn-fault-corpus-20260912-final. This supports workload-context
+dependence, not a permanent stuck bit or a general correction. Next discriminator:
+widen probe while keeping two primitives/one submission and same physical target;
+not yet implemented. Current focus module SHA256:
+ed03e28e52a36c4546b1482781f8f87533b658b4a6b6d9fdfe411f92bc8047c9.
+Cleanup verified module absent, lock released, same boot/printk/provider.
+
+### 2026-09-12: compact width-dependent fault reproducer
+
+The focused two-quad SET probe now supports widening x528..535 to x0..535
+with the same right edge, y52..55, one submission and 499 command bytes.
+Tiny geometry passed another 1000 iterations; wide geometry failed twice at
+(530,54), white → ffff7f, after one and zero clean iterations respectively.
+Both raw EFB and RGB565 copy detect the bit error. Full-screen workload and
+30 submissions are unnecessary. See `wii-gcn-fault-investigation-2026-09-12.md`
+for archived captures and scope; the fault remains unresolved.
+
+### 2026-09-12: focused width screen and extended checks
+
+Added bounded focused widths ending at x536 with unchanged two-quad/four-row
+coverage structure. The 64-iteration screen passed widths 8,16,32,64,128 and
+failed 256,512,536. Extended testing caught width 128 failing after 182 clean
+iterations; width 64 passed 1000; width 256 then failed after 62. Both longer
+failures were at (512,52). This does not establish a safe width threshold.
+Evidence and planned equal-coverage split experiment are in
+`wii-gcn-fault-investigation-2026-09-12.md`. Build and 35 audit tests pass;
+installed provider unchanged.
+
+### 2026-09-12: equal-coverage horizontal subdivision passes focused probes
+
+Splitting 128-pixel and 536-pixel thin focused spans into pieces at most
+64 pixels wide passed 1000 iterations each. Their unsplit controls failed
+after 80 and 3 clean iterations respectively, at the known (512,52) and
+(530,54) blue-bit faults. Coverage and submission count are unchanged;
+primitive counts and command bytes increase. Full-screen subdivision remains
+to be tested. See the fault investigation report for exact module hashes and
+verified evidence. Installed provider unchanged; 37 audit tests pass.
+
+### 2026-09-12/13: full-screen 64-pixel two-row subdivision
+
+Full-screen thin strips subdivided into 64x2 quads passed 1000 iterations
+each for SET white, ordinary red/white and alternating red/white strips.
+All three unsplit controls failed immediately. This preserves complete image
+coverage and 30 submissions, increasing each batch to 88 quads. The first
+striped attempt was rejected by an old extended-viewport parameter guard;
+that ERROR is archived separately and the corrected run passed.
+
+This validates the diagnostic direct-color two-row cases, not textured
+scaling or arbitrary geometry. See the investigation report for exact hashes
+and evidence. Installed provider unchanged; final 39 audit tests pass.
+
+### 2026-09-13: bounded textured span comparison
+
+Native final textured rectangles are diagnostically divided into three
+80-row batches to keep 64-pixel subdivision below the 64 KiB FIFO. Both
+64/160 spans passed16-frame screening. Extended comparison: matched
+160-pixel spans failed after217 frames; 64-pixel spans passed256; original
+one-batch baseline also passed256. Preserve all three results, including
+the passing baseline. Narrow subdivision costs about2.5 times the final
+vertex traffic and two extra final waits per sequence, with no new texture
+buffer. See the investigation report and separate resource re-audit.
+Default behavior and installed provider unchanged;40 audit tests pass.
+
+### 2026-09-13: nonidentity offset enlargement compatibility
+
+Added diagnostic final spans64/128 for the existing tiled255x79-to-256x79
+offset enlargement, plus an explicit bounded repeat selector in the client.
+Both widths passed16-iteration screening and1000-iteration extended runs
+with exact source, scaled-output and destination-preservation checks. Final
+streams are26933/14293 bytes respectively, each one submission. This is
+compatibility evidence, not a demonstrated reliability benefit. Larger
+ratio changes remain unvalidated. See the investigation report for archives.
+
+### 2026-09-13: full-screen2x enlargement compatibility
+
+Diagnostic final spans64 and320 both passed16-iteration screening and
+1000-iteration extended tests for linear RGB565320x240-to-640x480 scaling.
+Six bounded batches preserve the original sampling and full-image oracle.
+Largest batch32974/7374 bytes; total final commands193014/39414 bytes
+respectively. No new texture buffers. The matched wider control also passed,
+so this establishes compatibility rather than improved reliability. Reduction
+and other ratios remain to be tested. See the fault report for exact archives.
+
+### 2026-09-13: one-submission reduction compatibility
+
+Final textured spans 64 and 160 both passed 16-iteration screening and
+1000-iteration extension for 640x240-to-320x120 reduction. Both retain exact
+odd-coordinate sampling, the same nonuniform source and one final submission.
+Streams are 48974 and 20174 bytes, respectively. This confirms compatibility,
+not a demonstrated benefit over the wider control. See the investigation
+report for archived evidence and the proposed content-variation comparison.
+
+### 2026-09-13: repeatable content sweep at fixed reduction geometry
+
+Using the unchanged reduction module, both64/160 spans passed1000 iterations
+cycling eight source families: black, white, RGB primaries, checkerboard,
+walking bits and repeatable mixed values. Phase/seed changes across cycles.
+All125 cycles passed the full38400-pixel output and RGB565-precision EFB
+oracles. This rules out these content changes as sufficient triggers in
+this geometry, not in all workloads. Return next to known-failing geometry
+instead of repeating this passing reduction. Exact replay and hashes are
+in the investigation report;44 audit tests pass.
+
+### 2026-09-13: compact probe placement comparison
+
+Moved the two536x2 SET quads vertically with unchanged color, width,
+viewport, coverage count and499-byte submission. Top52 failed at(530,54);
+top53 failed at(302,54). Top60 passed64 then failed after717 clean
+iterations at(475,63). Top180 passed1000; repeated top52 failed after9
+at(530,54). Placement affects observations but does not identify an immune
+region or prove a defective physical row. See the investigation report for
+verified archives and exact errors. Build and45 audit tests pass; installed
+provider unchanged and remote cleanup verified.
+
+### 2026-09-13: compensated viewport does not remove the recurrent fault
+
+Viewport y+32 with vertex y-32 retains the original focused physical
+coverage. It failed twice at(530,54), as did the matched viewport-rewrite
+control, with the same white-to-ffff7f error. Exact command-count and
+coverage audits pass; evidence is in the investigation report. No default
+rendering or installed-provider change. Build and46 audit tests pass.
+
+### 2026-09-13: matched padding rejects extra-command explanation
+
+Sixteen zero-area quads plus the original two wide draws match subdivision's
+18 quads,72 vertices,1267 bytes and one submission over identical pixels.
+The padded control failed twice at (530,54), after17 and14 clean iterations;
+subdivision passed64 then1000. Extra command traffic alone is insufficient.
+This still does not match internal raster work or isolate width from every
+consequence of subdivision. Exact evidence is in the investigation report.
+W=1 build and47 audit tests pass; installed provider unchanged.
+
+### 2026-09-13: narrow subdivision survives alternate drawing orders
+
+Reversing the same 18 narrow quads and drawing them column-major each
+passed 1000 iterations with zero raw/copy errors. Both retain the original
+coverage, 1267 command bytes and one submission. The matched padded-wide
+control failed after 14 clean iterations at (530,54), white to `ffff7f`.
+Original row-major screening command hashes match the previous capture.
+The subdivision result survives all three tested orders; this remains a
+scoped diagnostic result, not a general thin-primitive fix. Exact evidence
+and module hash are in the investigation report. W=1 build and 48 audit
+tests pass; manifests and remote cleanup verified, installed driver unchanged.
+
+### 2026-09-13: subdivision boundaries matter; wider pieces are not a general fix
+
+Left-anchored spans 96, 128 and 256 each passed 1000 focused iterations,
+but all leave a short final piece around the recurrent fault pixel. Moving
+the remainder to the left preserves coverage, piece widths/count, command
+budget and submission count. The right-anchored 256 case then failed after
+9 clean iterations at (530,54), despite passing its 64-iteration screen.
+The original wide control also failed. Right-anchored 64 passed 1000 with
+zero raw/copy errors. These results support retaining the narrower scoped
+workaround and reject inferring a universal 256-pixel limit from the first
+sweep. They do not establish the internal hardware mechanism. Detailed
+archives, repeated-control results and hashes are in the investigation
+report. W=1 builds and 51 audit tests pass; production defaults unchanged.
+
+### 2026-09-13: intermediate widths pass the shifted-boundary extension
+
+Using the unchanged diagnostic module, right-128 and right-96 each passed
+1000 iterations with zero raw/copy errors. Right-256 then failed after
+580 clean iterations at (530,54), the same white-to-`ffff7f` error as its
+two earlier failures. Span 128 therefore passes both tested anchors at
+this coverage, but its earlier standalone failure still rules out calling
+128 a universal safe limit. See the investigation report for evidence,
+command costs and limitations. Manifest and remote cleanup verified;
+installed driver and production defaults unchanged.
+
+### 2026-09-13: 128-pixel reversal fails; combined 64-pixel control passes
+
+Right-anchored span 128 passed 1000 in column-major order but failed twice
+in reverse order, after 21 and 83 clean iterations at (530,54), with the
+same white-to-`ffff7f` error. Right-anchored span 64 passed 1000 in reverse
+order. Thus the 128-pixel row-major pass does not generalize across tested
+orders, while the narrower case survives the combined boundary/order
+change. The diagnostic module is unchanged. Both evidence manifests and
+remote cleanup verified; 54 audit tests pass. Detailed results are in the
+investigation report. Installed driver and production defaults unchanged.
+
+### 2026-09-14: 96-pixel reversal also fails repeatedly
+
+Right-anchored reverse-96 failed after 373 and 118 clean iterations at
+(530,54), with the same white-to-`ffff7f` error. Reverse-64 passed another
+1000 iterations before the repeat. This closes the intermediate-width
+comparison in favor of retaining 64 as the conservative tested choice;
+96 and 128 row-major passes do not survive reversal. These direct-color
+results do not establish a universal fix or justify a general production
+policy. Next work should address actual textured workloads and Wii FIFO/
+command cost rather than further narrow width optimization. Both evidence
+manifests and cleanup verified; 55 audit tests pass. Driver unchanged.
+
+### 2026-09-14: textured 64-pixel subdivision passes with two batches
+
+The native diagnostic can use two 120-row batches instead of three 80-row
+batches. Both 64- and 160-pixel spans passed 256 frames / 1024 quadrant
+sequences with zero output or preservation errors. Span 64 uses 48008
+bytes per batch, within the 64 KiB FIFO guard, saving one completion wait
+per sequence without changing quad count, sampling phase or texture memory.
+The wider pass must be retained alongside its earlier three-batch failure;
+this is a scoped batching improvement, not a general reliability fix or
+production benchmark. The default batch size and production identity path
+are unchanged. Evidence and resource totals are in the investigation
+report. W=1 build and 56 audit tests pass; manifests and cleanup verified,
+installed driver unchanged.
+
+### 2026-09-14: reversed textured batches expose an intermediate-image fault
+
+Reversing quads within each of the two native final batches retained the
+same geometry, phase, FIFO budget and waits. Span 64 passed 256 frames /
+1024 sequences with zero stage/output/preservation errors. Span 160 had
+an intermediate final-image error at sequence 967, frame 242, pixel
+(366,286), despite an end-of-frame client PASS. The stage audit correctly
+marked FAIL. Reporting now separates 241 clean frames before that error
+from 256 frames actually checked; stage-only errors need not stop the
+client. Original evidence remains unchanged, with a separate verified
+re-audit documented in the investigation report. Normal-order command
+hashes matched the previous module exactly. W=1 build and 58 audit tests
+pass; cleanup verified, production defaults and installed driver unchanged.
+
+### 2026-09-14: native diagnostics now support first-bad-quadrant stopping
+
+Optional `scale_native_stop_on_error` retains complete evidence for the
+first bad quadrant, then returns EILSEQ before the next quadrant ioctl.
+Deliberate oracle controls stopped exactly at sequences 1 and 3. A separate
+uninjected reverse-160 run then reproduced a real final-stage mismatch at
+sequence 31, frame 8, and stopped before sequence 32. Reporting correctly
+distinguishes 7 clean frames from 8 checked, including the partial last
+frame. Clean stop-enabled rendering retained identical command hashes.
+This fixes the test's intermediate-error stop gap, not the pixel fault.
+Both manifests and cleanup verified; W=1 build and 61 audit tests pass.
+Production defaults and installed driver unchanged. Details and labeled
+control evidence are in the investigation report.
+
+### 2026-09-14: stop-enabled textured comparison retains the 64-pixel pass
+
+With the unchanged diagnostic module, reversed two-batch span 64 passed
+256 frames / 1024 sequences with zero stage/output/preservation errors.
+Span 160 then failed at sequence 86, frame 22, pixel (495,234), and stopped
+before the next quadrant. This confirms the narrower result with the
+verified early-stop harness; it does not prove a universal rendering fix.
+Exact evidence is in the investigation report. Manifest and cleanup
+verified; production defaults and installed driver unchanged.
+
+### 2026-09-14: 64-pixel native path passes varied source content
+
+The unchanged stop-enabled diagnostic module was tested with a client
+cycling solid colors, one-pixel checkerboards, walking RGB565 bits and
+seeded noise. Span 64 passed 256 frames / 1024 sequences, 32 complete
+cycles, with zero stage/output/preservation errors. Span 160 stopped at
+sequence 32 during the first noise frame, with an independently verified
+expected value at the failing pixel. The audit requires every attempted
+frame's pattern and seed; 63 audit tests pass. A progress-display reset
+caused by extra log lines was corrected without altering evidence. Both
+manifests and cleanup verified; driver binary, production defaults and
+installed provider unchanged. Exact evidence is in the investigation report.
+
+### 2026-09-14: general bounded final-stage path passes compatibility regression
+
+Added an opt-in final-stage scaler path retaining nearest-row mapping and
+UV phase, with clipped 64-pixel pieces and at most 600 quads / 48008 bytes
+per batch. The existing identity shortcut retains precedence. Full render
+regression passed with the option enabled and with the default path. The
+new helper handled 27 scaling calls across offsets, odd widths, enlargement
+and reduction, with audited FIFO budgets. No texture buffers were added;
+extra commands and completion waits remain costs to assess. This is a
+compatibility screen, not a long-run qualification. W=1 build and 64 audit
+tests pass; manifest and cleanup verified. Option defaults off and the
+installed driver is unchanged. Details are in the investigation report.
+
+
+### 2026-09-14: general bounded scaling fails repeated enlargement
+
+The opt-in general 64-pixel final-stage helper passed 1000 offset enlargement
+iterations and 1000 varied-content reduction iterations, but full-screen
+320x240 to 640x480 enlargement failed on attempt 52 at (317,352), RGB565
+`0xdc9a` instead of `0xdc9e`. These are client-visible results without raw
+stage sampling. The compatibility regression did not qualify reliability.
+
+A controlled same-module comparison of 400 versus 600 quads per final batch
+also failed: attempt 145 at (285,368), `0xe68a` / `0xe68e`, and attempt 133 at
+(541,296), `0xba06` / `0xba0e`, respectively. Smaller batches are insufficient.
+The new experimental `scale_bounded_batch_quads` parameter permits 400/600,
+defaults to 600, and requires bounded mode when set to 400. Production defaults
+remain unchanged. Next work should localize crop/horizontal/final corruption,
+with explicit attention to how diagnostic readbacks change timing.
+
+Evidence: `wii-gcn-matrix-bounded-workloads-20260914-long-r2` and
+`wii-gcn-matrix-bounded-batch-20260914-r1`. The rebuilt module is archived as
+`/media/anolis/dev/wii-gcn-bounded-batch-module.ko`, SHA256
+`d10658d90eeac013a9aa8acdc38e8082530a481a075f1206d6ab823e759ae8fe`.
+The default render regression passed in
+`wii-gcn-matrix-bounded-batch-default-20260914-r1`; W=1 build, 69 audit tests,
+manifest checks and diff checks pass. CPU console restored, lock released,
+boot/printk/installed module unchanged. Full details and pixel values are in
+`docs/wii-gcn-fault-investigation-2026-09-12.md`.
+
+
+### 2026-09-14: horizontal-stage corruption localized; focused split passes twice
+
+The general final helper now permits system tracing without the specialized
+system-span override. Its stage oracle stops after the current call when
+any mismatch occurs. `bounded-system-trace` caught a fault on attempt 657:
+CPU crop clean, one raw/copied horizontal error at (62,166), actual RGB565
+`0xcf9d` versus `0xcf9f`, then two final errors beginning at (62,332). EFB and
+copied texture agreed throughout. This localizes this event to horizontal
+rendering, before the final batch logic.
+
+The untraced `bounded-system-horizontal-split` case enables the existing
+horizontal 2x120 subdivision instead of unsplit 2x240 strips, retaining the
+general final helper. It passed 1000 iterations, the unsplit control failed
+on attempt 90 at (541,296), and a second split run passed another 1000.
+That is 614400000 destination pixel checks across 2000 clean split iterations,
+without raw stage sampling. Horizontal vertices double, but horizontal
+submission count and texture allocation do not increase. This is evidence
+for a focused workaround, not a general reliability qualification.
+
+Evidence directories: `wii-gcn-matrix-bounded-trace-20260914-r1` and
+`wii-gcn-matrix-bounded-horizontal-20260914-r1` / `-r2` under `/media/anolis/dev`.
+Module archive `wii-gcn-bounded-trace-module.ko` SHA256
+`0ff249ebbee66b6138d1d62cddd88be5ce805150c306c0389bcf68c964c8727a`.
+W=1 build, 71 audit tests, default render regression, manifests and diff
+checks pass. Console restored; boot, printk and installed module unchanged.
+Next: general horizontal subdivision preserving sampling/identity behavior,
+then compatibility and repeated untraced varied-content validation. See the
+fault-investigation report for the complete captured stage counts and scope.
+
+
+### 2026-09-14: general horizontal and final helpers pass repeated workloads
+
+Added opt-in `scale_bounded_horizontal` with nearest-column grouping,
+at most 120-pixel-high pieces and at most 640 quads per horizontal batch.
+The first batch retains existing state; the final batch uses the caller's
+completion. This preserves one horizontal submission for the validated
+320x240 enlargement, adds no texture allocation, and retains the identity
+shortcut. It requires bounded final mode and remains disabled by default.
+
+The expanded regression checks an odd 255x255 to 256x127 case with offsets,
+a clipped 15-pixel tail and a batch break inside a column: 765 quads split
+640/125. All 28 horizontal calls / 29 batches pass the client oracle and
+independent command audit. The long sweep then passed 1000 iterations each
+of full-screen enlargement, varied-content reduction and offset enlargement,
+411136000 destination pixel checks total, followed by the default regression.
+No raw EFB sampling is claimed for those runs.
+
+Evidence: `wii-gcn-matrix-bounded-both-20260914-screen-r2` and
+`wii-gcn-matrix-bounded-both-20260914-long`. Module archive
+`/media/anolis/dev/wii-gcn-bounded-both-r2-module.ko`, SHA256
+`50bfa40e6127c21c8774f4bd337cfdefe2413495b28cdaf48d0324b376524f32`.
+The initial screen was a rejected provider-registration configuration error,
+now also covered by the strengthened active-provider audit. All 75 tests,
+W=1/strict-client builds, manifests and cleanup checks pass. Installed driver
+unchanged. Broader enlargement content and performance checks remain before
+considering a production default. See the fault-investigation report.

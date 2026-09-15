@@ -23,11 +23,15 @@ Options:
                        xrgb8888-native[-tiled] (default: rgb565)
   --module-args ARGS   arguments passed to insmod
   --reuse-remote       require checksum-matched files already in /tmp
+  --expect-param N=V  Verify a loaded module parameter before testing
+  --quiet-kernel      Keep kernel diagnostics in dmesg, suppress tty spam
   --keep-loaded        leave gcn_gx loaded after a successful test
   --allow-dirty        permit testing from an uncommitted source tree
 
 The Wii console reports connection, transfer, load, test, unload, and final
-status. The complete test output remains on the invoking terminal.
+status. EFB iteration tests show a progress bar on both consoles; detailed
+kernel diagnostics remain in dmesg. The original console log level is restored
+on exit. Other test clients retain their normal terminal output.
 EOF
 }
 
@@ -44,10 +48,19 @@ flip_format=rgb565
 module_args=
 reuse_remote=0
 keep_loaded=0
+quiet_kernel=0
+expect_param=
 allow_dirty=0
 
 while (($#)); do
 	case "$1" in
+	--expect-param)
+		expect_param=$2
+		shift
+		;;
+	--quiet-kernel)
+		quiet_kernel=1
+		;;
 	--host)
 		ssh_host=$2
 		shift
@@ -159,6 +172,11 @@ if [[ ! $client_args =~ ^[A-Za-z0-9_./,=+\ -]*$ ]]; then
 	exit 2
 fi
 
+if [[ -n $expect_param && ! $expect_param =~ ^[A-Za-z0-9_]+=[A-Za-z0-9_]+$ ]]; then
+	printf 'Invalid expected parameter: %s\n' "$expect_param" >&2
+	exit 2
+fi
+
 ssh_key=${WII_SSH_KEY:-$HOME/.ssh/id_rsa}
 if [[ $ssh_host == *@* ]]; then
 	remote=$ssh_host
@@ -206,6 +224,7 @@ close_ssh_master()
 }
 
 loaded=0
+saved_console_level=
 cleanup()
 {
 	local status=$?
@@ -215,6 +234,9 @@ cleanup()
 		remote_exec "rmmod gcn_gx" >/dev/null 2>&1 || true
 		loaded=0
 		remote_notice "CPU console restored" >/dev/null 2>&1 || true
+	fi
+	if [[ -n $saved_console_level ]]; then
+		remote_exec "printf '%s\\n' '$saved_console_level' > /proc/sys/kernel/printk" >/dev/null 2>&1 || true
 	fi
 	close_ssh_master
 }
@@ -267,9 +289,42 @@ if [[ -n $flip_client ]]; then
 	upload_verified "$flip_client" "$remote_flip_client" "page-flip test client"
 fi
 
+if (( quiet_kernel )); then
+	saved_console_level=$(remote_exec "cut -f1 /proc/sys/kernel/printk")
+	[[ $saved_console_level =~ ^[0-9]+$ ]] || exit 1
+	remote_exec "printf '4\\n' > /proc/sys/kernel/printk"
+fi
 remote_notice "loading accelerator module"
-remote_exec "insmod $remote_module $module_args"
-loaded=1
+if [[ " $module_args " =~ [[:space:]]efb_clear_iterations=([1-9][0-9]*)[[:space:]] ]]; then
+	efb_iterations=${BASH_REMATCH[1]}
+	# Upload the small helper even when reusing the module/client binaries.
+	saved_reuse_remote=$reuse_remote
+	reuse_remote=0
+	upload_verified tools/wii-gcn-efb-progress.sh /tmp/wii-gcn-efb-progress "progress helper"
+	reuse_remote=$saved_reuse_remote
+	if [[ -z $saved_console_level ]]; then
+		saved_console_level=$(remote_exec "cut -f1 /proc/sys/kernel/printk")
+	fi
+	[[ $saved_console_level =~ ^[0-9]+$ ]] || exit 1
+	# Keep every diagnostic record in dmesg, but show only errors on the tty.
+	remote_exec "printf '4\\n' > /proc/sys/kernel/printk"
+	loaded=1
+	remote_exec "/tmp/wii-gcn-efb-progress $remote_module $efb_iterations $module_args"
+else
+	remote_exec "insmod $remote_module $module_args"
+	loaded=1
+fi
+if [[ -n $expect_param ]]; then
+	param_name=${expect_param%%=*}
+	param_value=${expect_param#*=}
+	actual_value=$(remote_exec "cat /sys/module/gcn_gx/parameters/$param_name")
+	[[ $actual_value == "$param_value" ]] || {
+		printf 'Module parameter mismatch: %s expected=%s actual=%s\n' \
+			"$param_name" "$param_value" "$actual_value" >&2
+		exit 1
+	}
+	remote_notice "parameter $param_name verified $actual_value"
+fi
 remote_notice "running hardware test"
 set +e
 remote_exec "$remote_client $client_args"

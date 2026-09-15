@@ -1,0 +1,75 @@
+Opening persistent SSH connection to root@10.3.10.59
+GCN render ABI 1: MEM1 total=524288 free=524288 alignment=4096
+MEM1: allocated 4 x 131072 bytes before ENOSPC
+SUBMIT: copied 65536 tiled RGB565 pixels byte-exactly
+SUBMIT: filled 65536 tiled RGB565 pixels byte-exactly across 4 colours
+SUBMIT: filled 73x61 RGB565 rectangle with all outside pixels preserved
+SUBMIT: filled bottom-right RGB565 pixel with prior surface preserved
+SUBMIT: blitted translated 67x53 RGB565 rectangle with all outside pixels preserved
+SUBMIT: blitted bottom-right RGB565 pixel with prior surface preserved
+SUBMIT: blitted from 320x192 source into 256x256 destination
+SUBMIT: unequal-dimension outside pixels preserved
+SUBMIT: blitted unequal source and destination bottom-right pixels
+SUBMIT: unequal-dimension prior surface preserved
+SUBMIT: same-object identical-region blit preserved all source and outside pixels
+SUBMIT: same-object non-overlap blit preserved all source and outside pixels
+SUBMIT: same-object right-overlap blit preserved all source and outside pixels
+SUBMIT: same-object left-overlap blit preserved all source and outside pixels
+SUBMIT: same-object down-overlap blit preserved all source and outside pixels
+SUBMIT: same-object up-overlap blit preserved all source and outside pixels
+SUBMIT: same-object diagonal-overlap blit preserved all source and outside pixels
+SUBMIT: same-object RGB565 blits passed in all overlap directions
+SCALED: no-scale control preserved all sampled and outside pixels
+SCALED: two-times upscale preserved all sampled and outside pixels
+SCALED: two-times downscale preserved all sampled and outside pixels
+SCALED: mixed-axis scale preserved all sampled and outside pixels
+SCALED: odd-ratio scale preserved all sampled and outside pixels
+SCALED: one-pixel replication preserved all sampled and outside pixels
+SCALED: same-object overlapping scale preserved all sampled and outside pixels
+SCALED: small prime upscale preserved all sampled and outside pixels
+SCALED: prime upscale preserved all sampled and outside pixels
+SCALED: prime downscale preserved all sampled and outside pixels
+SCALED: prime enlargement preserved all sampled and outside pixels
+SCALED: opposed prime down-up preserved all sampled and outside pixels
+SCALED: opposed prime up-down preserved all sampled and outside pixels
+SCALED: near-identity reduction preserved all sampled and outside pixels
+SCALED: near-identity enlargement preserved all sampled and outside pixels
+SCALED: full-width reduction preserved all sampled and outside pixels
+SCALED: full-width enlargement preserved all sampled and outside pixels
+SCALED: horizontal one-pixel replication preserved all sampled and outside pixels
+SCALED: vertical one-pixel replication preserved all sampled and outside pixels
+SCALED: extreme horizontal reduction preserved all sampled and outside pixels
+SCALED: extreme vertical reduction preserved all sampled and outside pixels
+SCALED: same-object near-identity overlap preserved all sampled and outside pixels
+SCALED: same-object opposed scale preserved all sampled and outside pixels
+SCALED: RGB565 nearest blits passed all scale and alias cases
+DRAW: triangle matched 17024 interior and 46960 exterior RGB565 pixels
+DRAW: batch matched 4278 red, 4278 blue, and 55636 background RGB565 pixels
+DRAW state: disabled=17024 viewport=7381 scissor=3165 blend=31878 sample=800f
+DRAW depth: blue-near=17024 red-painter=17024
+DRAW depth never: matched 17024 interior pixels
+DRAW depth equal: matched 17024 interior pixels
+DRAW depth lequal: matched 17024 interior pixels
+DRAW depth greater: matched 17024 interior pixels
+DRAW depth nequal: matched 17024 interior pixels
+DRAW depth gequal: matched 17024 interior pixels
+DRAW depth always: matched 17024 interior pixels
+DRAW depth less-no-write: matched 17024 interior pixels
+DRAW: textured batch matched 48384 sampled and 17152 preserved RGB565 pixels
+DRAW: indexed batch matched 32336 filled and 30256 preserved RGB565 pixels
+DRAW: indexed textured batch matched 41600 sampled and 23936 preserved RGB565 pixels
+DRAW itex depth: near=44928 painter=44928 preserved=20608
+DRAW fixed: pass=44928 replace=44928 near=44928 painter=44928 preserved=20608 culled=65536
+RGBA8 TEXTURE: 64 alpha-composited pixels matched
+LINEAR FILTER row 0: 0000 0000 7bef ffdf 7bcf 0000 8430 ffff
+LINEAR FILTER: 64 bilinear pixels matched
+SYSTEM RENDER: 640x480 linear fill, rectangle, and fixed draw matched every pixel
+SCALED: 320x120 to 640x240 preserved all 153600 pixels
+SCALED: 640x240 to 320x120 preserved all 38400 pixels
+SCALED: tiled system 320x240 to 640x480 preserved all 307200 pixels
+SCALED: system objects preserved all 524288 MEM1 bytes
+SCALED: linear system 320x240 to 640x480 preserved all 307200 pixels
+SCALED: system objects preserved all 524288 MEM1 bytes
+XRGB8888: linear 320x240 to RGB565 640x480 matched all 307200 pixels
+XRGB8888: system objects preserved all 524288 MEM1 bytes
+PASS: GCN render UAPI

@@ -284,6 +284,278 @@ static bool gx_scale_native_preserve_fence;
 module_param_named(scale_native_preserve_fence, gx_scale_native_preserve_fence, bool, 0444);
 MODULE_PARM_DESC(scale_native_preserve_fence,
 		 "Fence and snapshot destination preservation in the native trace");
+static bool gx_scale_native_state_fence;
+module_param_named(scale_native_state_fence, gx_scale_native_state_fence, bool, 0444);
+MODULE_PARM_DESC(scale_native_state_fence,
+		 "Fence and snapshot final state before native vertices; requires preserve fence");
+static bool gx_scale_native_failure_probe;
+module_param_named(scale_native_failure_probe, gx_scale_native_failure_probe, bool, 0444);
+MODULE_PARM_DESC(scale_native_failure_probe,
+		 "Inspect first native post-draw mismatch before copy; requires state fence");
+/* Protected by gx_submit_lock; capture once per module load. */
+static bool gx_native_failure_captured;
+static unsigned int gx_efb_clear_iterations;
+module_param_named(efb_clear_iterations, gx_efb_clear_iterations, uint, 0444);
+MODULE_PARM_DESC(efb_clear_iterations,
+		 "Run 1..1000 full-EFB red/white clear checks before registering accelerator");
+static unsigned int gx_efb_clear_completed;
+module_param_named(efb_clear_completed, gx_efb_clear_completed, uint, 0444);
+static int gx_efb_clear_result = -EAGAIN;
+module_param_named(efb_clear_result, gx_efb_clear_result, int, 0444);
+static bool gx_efb_primitive_test;
+module_param_named(efb_primitive_test, gx_efb_primitive_test, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_test,
+		 "Draw untextured primitives over verified black in the EFB clear test");
+static bool gx_efb_primitive_single_quad;
+module_param_named(efb_primitive_single_quad, gx_efb_primitive_single_quad, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_single_quad,
+		 "Use one full-screen quad instead of split rows; requires primitive test");
+static bool gx_efb_primitive_two_quads;
+module_param_named(efb_primitive_two_quads, gx_efb_primitive_two_quads, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_two_quads,
+		 "Use two full-height quads; requires primitive test, excludes single quad");
+static bool gx_efb_primitive_batch;
+module_param_named(efb_primitive_batch, gx_efb_primitive_batch, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_batch,
+		 "Fence split-row primitives every 16 rows; excludes other geometry modes");
+static bool gx_efb_primitive_full_width;
+module_param_named(efb_primitive_full_width, gx_efb_primitive_full_width, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_full_width,
+		 "Draw full-width one-row strips; requires batched primitive test");
+static bool gx_efb_primitive_bands;
+module_param_named(efb_primitive_bands, gx_efb_primitive_bands, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_bands,
+		 "Coalesce each full-width batch into one 16-row band");
+static bool gx_efb_primitive_repeat_bands;
+module_param_named(efb_primitive_repeat_bands, gx_efb_primitive_repeat_bands, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_repeat_bands,
+		 "Draw each 16-row band 16 times; requires band mode");
+static bool gx_efb_primitive_pad_bands;
+module_param_named(efb_primitive_pad_bands, gx_efb_primitive_pad_bands, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_pad_bands,
+		 "Use 15 zero-area quads then one band; requires repeated-band mode");
+static bool gx_efb_primitive_two_rows;
+module_param_named(efb_primitive_two_rows, gx_efb_primitive_two_rows, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_two_rows,
+		 "Use eight zero-area quads then eight two-row strips; requires padded bands");
+static bool gx_efb_primitive_interleave;
+module_param_named(efb_primitive_interleave, gx_efb_primitive_interleave, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_interleave,
+		 "Interleave zero-area padding with two-row strips; requires two-row mode");
+static bool gx_efb_primitive_alternate;
+module_param_named(efb_primitive_alternate, gx_efb_primitive_alternate, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_alternate,
+		 "Draw alternating two-row strips before filling gaps; excludes interleave");
+static bool gx_efb_primitive_odd_rows;
+module_param_named(efb_primitive_odd_rows, gx_efb_primitive_odd_rows, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_odd_rows,
+		 "Shift two-row boundaries by one; excludes interleave and alternate");
+static bool gx_efb_primitive_edge_pair;
+module_param_named(efb_primitive_edge_pair, gx_efb_primitive_edge_pair, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_edge_pair,
+		 "Put both one-row strips first to restore even boundaries; requires odd rows");
+static bool gx_efb_primitive_interior_only;
+module_param_named(efb_primitive_interior_only, gx_efb_primitive_interior_only, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_interior_only,
+		 "Keep odd-row batch edges black; requires odd rows and excludes edge pair");
+static bool gx_efb_primitive_interior_even;
+module_param_named(efb_primitive_interior_even, gx_efb_primitive_interior_even, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_interior_even,
+		 "Shift interior strips up one row; requires interior-only mode");
+/* Identity copies need no per-source-row/column run decomposition. */
+static bool gx_scale_bounded_final;
+module_param_named(scale_bounded_final, gx_scale_bounded_final, bool, 0444);
+MODULE_PARM_DESC(scale_bounded_final, "Experimental: generic final nearest runs in 64-pixel pieces and bounded batches");
+static bool gx_scale_bounded_horizontal;
+module_param_named(scale_bounded_horizontal, gx_scale_bounded_horizontal, bool, 0444);
+MODULE_PARM_DESC(scale_bounded_horizontal, "Experimental: horizontal nearest runs in at most 120-pixel pieces");
+static unsigned int gx_scale_bounded_batch_quads = 600;
+module_param_named(scale_bounded_batch_quads, gx_scale_bounded_batch_quads, uint, 0444);
+MODULE_PARM_DESC(scale_bounded_batch_quads, "Experimental bounded final batch limit: 400 or 600 quads");
+
+static bool gx_scale_identity_quad = true;
+module_param_named(scale_identity_quad, gx_scale_identity_quad, bool, 0444);
+MODULE_PARM_DESC(scale_identity_quad, "Use single textured quads for 1:1 scaler stages");
+static bool gx_scale_native_single_quad;
+module_param_named(scale_native_single_quad, gx_scale_native_single_quad, bool, 0444);
+MODULE_PARM_DESC(scale_native_single_quad, "Use one textured quad for traced native 1:1 rectangle copies");
+static bool gx_efb_primitive_stripe_colors;
+module_param_named(efb_primitive_stripe_colors, gx_efb_primitive_stripe_colors, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_stripe_colors, "Alternate red/white between diagnostic strips");
+static bool gx_efb_primitive_extended_viewport;
+module_param_named(efb_primitive_extended_viewport, gx_efb_primitive_extended_viewport, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_extended_viewport, "Use 528-row viewport for thin-strip diagnostic controls");
+static bool gx_efb_primitive_overlap_rows;
+module_param_named(efb_primitive_overlap_rows, gx_efb_primitive_overlap_rows, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_overlap_rows, "Extend thin strips to four rows, overwriting overlaps in order");
+static bool gx_efb_primitive_batch_snapshot;
+module_param_named(efb_primitive_batch_snapshot, gx_efb_primitive_batch_snapshot, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_batch_snapshot, "Check full EFB after each two-row diagnostic batch");
+static bool gx_efb_primitive_full_split;
+module_param_named(efb_primitive_full_split, gx_efb_primitive_full_split, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_full_split, "Diagnostic: subdivide full-screen two-row strips into 64-pixel quads");
+
+static bool gx_efb_primitive_focus_pad;
+module_param_named(efb_primitive_focus_pad, gx_efb_primitive_focus_pad, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_pad, "Diagnostic: 16 degenerate pads before two focused wide quads");
+
+static unsigned int gx_efb_primitive_focus_order;
+module_param_named(efb_primitive_focus_order, gx_efb_primitive_focus_order, uint, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_order, "Diagnostic: split order 0 row-major, 1 reverse, 2 column-major");
+
+static bool gx_efb_primitive_focus_right;
+module_param_named(efb_primitive_focus_right, gx_efb_primitive_focus_right, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_right, "Diagnostic: anchor focused split grid to right edge");
+
+static unsigned int gx_efb_primitive_focus_span = 64;
+module_param_named(efb_primitive_focus_span, gx_efb_primitive_focus_span, uint, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_span, "Diagnostic: focused subdivision width 64, 96, 128 or 256");
+
+static bool gx_efb_primitive_focus_split;
+module_param_named(efb_primitive_focus_split, gx_efb_primitive_focus_split, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_split, "Diagnostic: subdivide focused 128/536-pixel coverage");
+
+static bool gx_efb_primitive_focus_viewport;
+module_param_named(efb_primitive_focus_viewport, gx_efb_primitive_focus_viewport, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_viewport, "Diagnostic: matched viewport rewrite for focused wide probe");
+
+static unsigned int gx_efb_primitive_focus_viewport_shift;
+module_param_named(efb_primitive_focus_viewport_shift, gx_efb_primitive_focus_viewport_shift, uint, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_viewport_shift, "Diagnostic: viewport y offset 0 or 32 with compensating vertex coordinates");
+
+static unsigned int gx_efb_primitive_focus_top = 52;
+module_param_named(efb_primitive_focus_top, gx_efb_primitive_focus_top, uint, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_top, "Diagnostic: focused rectangle top row, 0..476");
+
+static unsigned int gx_efb_primitive_focus_width = 8;
+module_param_named(efb_primitive_focus_width, gx_efb_primitive_focus_width, uint, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_width, "Diagnostic: focused width 8..536 ending at x536");
+
+static bool gx_efb_primitive_focus_wide;
+module_param_named(efb_primitive_focus_wide, gx_efb_primitive_focus_wide, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_focus_wide, "Diagnostic: widen focused draws to x0..535, retaining right edge");
+
+static bool gx_efb_primitive_focus;
+module_param_named(efb_primitive_focus, gx_efb_primitive_focus, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_focus, "Diagnostic: two 8x2 draws around recurrent pixel 530,54");
+static bool gx_efb_primitive_rgba6;
+module_param_named(efb_primitive_rgba6, gx_efb_primitive_rgba6, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_rgba6, "Diagnostic: use RGBA6/Z24 storage for forced black/white logic draws");
+static bool gx_efb_primitive_logic_clear;
+module_param_named(efb_primitive_logic_clear, gx_efb_primitive_logic_clear, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_logic_clear, "Diagnostic: force zero color with CLEAR logic operation");
+static bool gx_efb_primitive_logic_invert;
+module_param_named(efb_primitive_logic_invert, gx_efb_primitive_logic_invert, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_logic_invert, "Diagnostic: invert destination color with the logic operation");
+static bool gx_efb_primitive_logic_black;
+module_param_named(efb_primitive_logic_black, gx_efb_primitive_logic_black, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_logic_black, "Diagnostic: verify black background before logic-operation draws");
+static bool gx_efb_primitive_logic;
+module_param_named(efb_primitive_logic, gx_efb_primitive_logic, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_logic, "Diagnostic: enable COPY logic operation for accepted thin draws");
+static bool gx_efb_primitive_logic_set;
+module_param_named(efb_primitive_logic_set, gx_efb_primitive_logic_set, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_logic_set, "Diagnostic: use SET instead of COPY to force white output");
+static bool gx_efb_primitive_alpha_mixed;
+module_param_named(efb_primitive_alpha_mixed, gx_efb_primitive_alpha_mixed, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_alpha_mixed, "Diagnostic: alternate accepted/rejected two-row strips under GEQUAL128");
+static bool gx_efb_primitive_alpha_mixed_reverse;
+module_param_named(efb_primitive_alpha_mixed_reverse, gx_efb_primitive_alpha_mixed_reverse, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_alpha_mixed_reverse, "Diagnostic: reverse the mixed-alpha starting strip phase");
+static bool gx_efb_primitive_alpha_threshold;
+module_param_named(efb_primitive_alpha_threshold, gx_efb_primitive_alpha_threshold, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_alpha_threshold, "Diagnostic: compare emitted alpha against 128 with late depth timing");
+static bool gx_efb_primitive_alpha_threshold_pass;
+module_param_named(efb_primitive_alpha_threshold_pass, gx_efb_primitive_alpha_threshold_pass, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_alpha_threshold_pass, "Diagnostic: use GEQUAL instead of LESS for alpha threshold control");
+static bool gx_efb_primitive_alpha_never;
+module_param_named(efb_primitive_alpha_never, gx_efb_primitive_alpha_never, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_alpha_never, "Diagnostic: alpha NEVER rejects thin draws with late depth timing");
+static bool gx_efb_primitive_z_never;
+module_param_named(efb_primitive_z_never, gx_efb_primitive_z_never, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_z_never, "Diagnostic: depth NEVER rejects thin draws over verified white");
+static bool gx_efb_primitive_no_draw;
+module_param_named(efb_primitive_no_draw, gx_efb_primitive_no_draw, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_no_draw, "Diagnostic: submit state and fences without primitives over verified white");
+static bool gx_efb_primitive_no_color_write;
+module_param_named(efb_primitive_no_color_write, gx_efb_primitive_no_color_write, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_no_color_write, "Diagnostic: disable color/alpha writes over verified white");
+static bool gx_efb_primitive_white_background;
+module_param_named(efb_primitive_white_background, gx_efb_primitive_white_background, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_white_background, "Diagnostic: verify white EFB before thin primitive draws");
+static bool gx_efb_primitive_cpu_write;
+module_param_named(efb_primitive_cpu_write, gx_efb_primitive_cpu_write, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_cpu_write, "Fill EFB through CPU color aperture instead of drawing");
+static bool gx_efb_primitive_scissor_rows;
+module_param_named(efb_primitive_scissor_rows, gx_efb_primitive_scissor_rows, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_scissor_rows, "Use separate two-row scissored diagnostic quads");
+static bool gx_efb_primitive_tall_rows;
+module_param_named(efb_primitive_tall_rows, gx_efb_primitive_tall_rows, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_tall_rows, "Clip batch-height quads to two rows; requires scissor_rows");
+static bool gx_efb_primitive_constant;
+module_param_named(efb_primitive_constant, gx_efb_primitive_constant, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_constant,
+                 "Use TEV register color instead of interpolated vertex color in diagnostic draws");
+static bool gx_efb_primitive_late_z;
+module_param_named(efb_primitive_late_z, gx_efb_primitive_late_z, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_late_z,
+		 "Use late Z comparison during diagnostic draws; depth test stays disabled");
+static bool gx_efb_primitive_z_test;
+module_param_named(efb_primitive_z_test, gx_efb_primitive_z_test, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_z_test,
+		 "Enable always-pass depth comparison for diagnostic draws");
+static bool gx_efb_primitive_z_write;
+module_param_named(efb_primitive_z_write, gx_efb_primitive_z_write, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_z_write,
+		 "Also write depth during diagnostic draws; requires z_test");
+static bool gx_efb_primitive_four_rows;
+module_param_named(efb_primitive_four_rows, gx_efb_primitive_four_rows, bool, 0444);
+MODULE_PARM_DESC(efb_primitive_four_rows,
+		 "Use 12 zero-area quads then four four-row strips; excludes two-row mode");
+static bool gx_scale_native_idle_check;
+module_param_named(scale_native_idle_check, gx_scale_native_idle_check, bool, 0444);
+MODULE_PARM_DESC(scale_native_idle_check,
+		 "Snapshot native EFB after idle; requires final state fence");
+static bool gx_scale_native_idle_wait_only;
+module_param_named(scale_native_idle_wait_only, gx_scale_native_idle_wait_only, bool, 0444);
+MODULE_PARM_DESC(scale_native_idle_wait_only,
+		 "Skip post-idle EFB read; requires native idle checking");
+static unsigned int gx_scale_native_idle_us;
+module_param_named(scale_native_idle_us, gx_scale_native_idle_us, uint, 0444);
+MODULE_PARM_DESC(scale_native_idle_us,
+		 "Native idle checkpoint wait in microseconds (0 to 100000)");
+static unsigned int gx_scale_reduce_span;
+module_param_named(scale_reduce_span, gx_scale_reduce_span, uint, 0444);
+MODULE_PARM_DESC(scale_reduce_span, "Diagnostic: 640x240 reduction final spans 64 or 160, one bounded batch");
+
+static unsigned int gx_scale_system_span;
+module_param_named(scale_system_span, gx_scale_system_span, uint, 0444);
+MODULE_PARM_DESC(scale_system_span, "Diagnostic: 2x system final spans 64 or 320, six bounded batches");
+
+static unsigned int gx_scale_offset_span;
+module_param_named(scale_offset_span, gx_scale_offset_span, uint, 0444);
+MODULE_PARM_DESC(scale_offset_span, "Diagnostic: offset enlargement final spans 64 or 128 pixels");
+
+static bool gx_scale_native_stop_on_error;
+module_param_named(scale_native_stop_on_error, gx_scale_native_stop_on_error, bool, 0444);
+MODULE_PARM_DESC(scale_native_stop_on_error, "Diagnostic: return EILSEQ after the first native sequence with an oracle mismatch");
+
+static unsigned int gx_scale_native_test_mismatch;
+module_param_named(scale_native_test_mismatch, gx_scale_native_test_mismatch, uint, 0444);
+MODULE_PARM_DESC(scale_native_test_mismatch, "Diagnostic stop control: perturb one expected pixel at sequence 1..4; zero disables");
+
+static bool gx_scale_native_reverse;
+module_param_named(scale_native_reverse, gx_scale_native_reverse, bool, 0444);
+MODULE_PARM_DESC(scale_native_reverse, "Diagnostic: reverse textured quads within each native span batch");
+
+static unsigned int gx_scale_native_batch_rows = 80;
+module_param_named(scale_native_batch_rows, gx_scale_native_batch_rows, uint, 0444);
+MODULE_PARM_DESC(scale_native_batch_rows, "Diagnostic: native span batch height 80 or 120 rows");
+
+static unsigned int gx_scale_native_span;
+module_param_named(scale_native_span, gx_scale_native_span, uint, 0444);
+MODULE_PARM_DESC(scale_native_span, "Diagnostic: native final spans 64 or 160 with bounded batches");
+
 static bool gx_scale_native_horizontal_split;
 module_param_named(scale_native_horizontal_split, gx_scale_native_horizontal_split, bool, 0444);
 MODULE_PARM_DESC(scale_native_horizontal_split,
@@ -948,7 +1220,7 @@ static int gx_snapshot_scale_colors(u32 *pixels, u16 width, u16 height)
 }
 
 /* Only the full-surface linear RGB565 2x system upscale calls this. */
-static void gx_compare_system_scale(const u16 *source, const u16 *output,
+static bool gx_compare_system_scale(const u16 *source, const u16 *output,
 				    u16 stride, u16 width, u16 height,
 				    const u32 *efb, u32 sequence,
 				    const char *stage)
@@ -980,6 +1252,7 @@ static void gx_compare_system_scale(const u16 *source, const u16 *output,
 	pr_info("gcn-gx: system-scale seq=%u stage=%s pixels=%u mismatches=%u efb_mismatches=%u copy_mismatches=%u\n",
 		sequence, stage, width * height, mismatches, efb_mismatches,
 		copy_mismatches);
+	return mismatches || efb_mismatches || copy_mismatches;
 }
 
 /* Exact offset test: tiled 256x256 surfaces, source y=43, destination y=97. */
@@ -1025,8 +1298,8 @@ static void gx_compare_offset_scale(const u16 *source, const u16 *prior,
 		copy_mismatches);
 }
 
-static void gx_compare_native_prior(const u16 *prior, const u16 *texture,
-				    const u32 *efb, u32 sequence)
+static bool gx_compare_native_prior(const u16 *prior, const u16 *texture,
+				    const u32 *efb, u32 sequence, u32 snapshot)
 {
 	u32 texture_mismatches = 0;
 	u32 efb_mismatches = 0;
@@ -1044,18 +1317,77 @@ static void gx_compare_native_prior(const u16 *prior, const u16 *texture,
 			if ((uploaded != expected || rendered != expected) &&
 			    !texture_mismatches && !efb_mismatches)
 				pr_info("gcn-gx: native-prior-first seq=%u snapshot=%u x=%u y=%u uploaded=%04x expected=%04x argb=%08x efb=%04x\n",
-					sequence, !!efb, x, y, uploaded, expected,
+					sequence, snapshot, x, y, uploaded, expected,
 					argb, rendered);
 			texture_mismatches += uploaded != expected;
 			efb_mismatches += rendered != expected;
 		}
 	}
 	pr_info("gcn-gx: native-prior seq=%u snapshot=%u pixels=307200 texture_mismatches=%u efb_mismatches=%u\n",
-		sequence, !!efb, texture_mismatches, efb_mismatches);
+		sequence, snapshot, texture_mismatches, efb_mismatches);
+	return texture_mismatches || efb_mismatches;
 }
 
 /* Four native-resolution rectangles; prior destination is linear RGB565. */
-static void gx_compare_native_scale(const u32 *source, const u16 *prior,
+/* Exact native trace: 640x480 preservation and 512x256 active RGB565 texture. */
+static void gx_probe_native_failure(const u32 *source, const u16 *prior,
+				    const u16 *preserved, const u16 *horizontal,
+				    const u32 *efb, u16 origin_x, u16 origin_y,
+				    u32 sequence)
+{
+	u16 x;
+	u16 y;
+
+	if (gx_native_failure_captured)
+		return;
+	for (y = 0; y < 480; y++) {
+		for (x = 0; x < 640; x++) {
+			size_t linear = (size_t)y * 640 + x;
+			bool active = x >= origin_x && x < origin_x + 320 &&
+				      y >= origin_y && y < origin_y + 240;
+			u32 source_argb = READ_ONCE(source[linear]);
+			u16 expected = active ? gx_argb_to_rgb565(source_argb) :
+						READ_ONCE(prior[linear]);
+			const u16 *texture = active ? horizontal : preserved;
+			u16 tx = active ? x - origin_x : x;
+			u16 ty = active ? y - origin_y : y;
+			u16 stride = active ? 512 : 640;
+			size_t bytes = active ? 512 * 256 * sizeof(u16) :
+					       640 * 480 * sizeof(u16);
+			struct gx_scale_efb_sample reads[3];
+			u16 cached;
+			u16 refreshed;
+			size_t index;
+			int ret;
+			int i;
+
+			if (gx_argb_to_rgb565(efb[linear]) == expected)
+				continue;
+			gx_native_failure_captured = true;
+			index = gx_tiled_rgb565_index(tx, ty, stride);
+			cached = READ_ONCE(texture[index]);
+			/* Both textures are clean, GPU-readable, and no longer written. */
+			invalidate_dcache_range((unsigned long)texture,
+						(unsigned long)texture + bytes);
+			refreshed = READ_ONCE(texture[index]);
+			for (i = 0; i < ARRAY_SIZE(reads); i++) {
+				reads[i].x = x;
+				reads[i].y = y;
+				reads[i].argb = 0;
+			}
+			ret = gx_peek_scale_colors(reads, ARRAY_SIZE(reads));
+			pr_info("gcn-gx: native-probe seq=%u origin=%u,%u x=%u y=%u active=%u expected=%04x source=%08x prior=%04x snapshot=%08x texture=%s tx=%u ty=%u stride=%u cached=%04x refreshed=%04x peek_ret=%d peek0=%08x peek1=%08x peek2=%08x\n",
+				sequence, origin_x, origin_y, x, y, active, expected,
+				source_argb, prior[linear], efb[linear],
+				active ? "horizontal" : "preserved", tx, ty, stride,
+				cached, refreshed, ret, reads[0].argb, reads[1].argb,
+				reads[2].argb);
+			return;
+		}
+	}
+}
+
+static bool gx_compare_native_scale(const u32 *source, const u16 *prior,
 				    const u16 *output, const u32 *efb,
 				    u16 origin_x, u16 origin_y, u32 sequence,
 				    unsigned int stage)
@@ -1084,6 +1416,10 @@ static void gx_compare_native_scale(const u32 *source, const u16 *prior,
 				expected = prior[(size_t)y * 640 + x];
 			else
 				expected = gx_argb_to_rgb565(source[(size_t)sy * 640 + sx]);
+			if (stage == 2 && gx_scale_native_test_mismatch == sequence && !x && !y) {
+				expected ^= 1;
+				pr_info("gcn-gx: native-test-mismatch seq=%u stage=final x=0 y=0 expected_xor=0001\n", sequence);
+			}
 			if ((actual != expected || rendered != expected) &&
 			    !mismatches && !efb_mismatches)
 				pr_info("gcn-gx: native-first seq=%u origin=%u,%u stage=%s x=%u y=%u actual=%04x expected=%04x argb=%08x efb=%04x\n",
@@ -1097,6 +1433,7 @@ static void gx_compare_native_scale(const u32 *source, const u16 *prior,
 	pr_info("gcn-gx: native-scale seq=%u origin=%u,%u stage=%s pixels=%u mismatches=%u efb_mismatches=%u copy_mismatches=%u\n",
 		sequence, origin_x, origin_y, name, width * height, mismatches,
 		efb_mismatches, copy_mismatches);
+	return mismatches || efb_mismatches || copy_mismatches;
 }
 
 static void gx_compare_scale_colors(const u32 *pixels, const u16 *output,
@@ -2112,8 +2449,8 @@ static void __maybe_unused gx_draw_pos_quad(u16 width, u16 height)
 	wg_f32_bits(0x40800000); wg_f32_bits(0xC0800000); wg_f32_bits(F32_ZERO); /* ( 4, -4, 0) */
 }
 
-static void gx_emit_color_rect(u16 x0, u16 y0, u16 x1, u16 y1,
-			       u8 r, u8 g, u8 b)
+static void gx_emit_color_rect_alpha(u16 x0, u16 y0, u16 x1, u16 y1,
+			       u8 r, u8 g, u8 b, u8 alpha)
 {
 	u32 fx0 = f32_from_u16(x0);
 	u32 fy0 = f32_from_u16(y0);
@@ -2121,16 +2458,22 @@ static void gx_emit_color_rect(u16 x0, u16 y0, u16 x1, u16 y1,
 	u32 fy1 = f32_from_u16(y1);
 
 	wg_f32_bits(fx0); wg_f32_bits(fy0);
-	gx_wr8(r); gx_wr8(g); gx_wr8(b); gx_wr8(0xff);
+	gx_wr8(r); gx_wr8(g); gx_wr8(b); gx_wr8(alpha);
 
 	wg_f32_bits(fx1); wg_f32_bits(fy0);
-	gx_wr8(r); gx_wr8(g); gx_wr8(b); gx_wr8(0xff);
+	gx_wr8(r); gx_wr8(g); gx_wr8(b); gx_wr8(alpha);
 
 	wg_f32_bits(fx1); wg_f32_bits(fy1);
-	gx_wr8(r); gx_wr8(g); gx_wr8(b); gx_wr8(0xff);
+	gx_wr8(r); gx_wr8(g); gx_wr8(b); gx_wr8(alpha);
 
 	wg_f32_bits(fx0); wg_f32_bits(fy1);
-	gx_wr8(r); gx_wr8(g); gx_wr8(b); gx_wr8(0xff);
+	gx_wr8(r); gx_wr8(g); gx_wr8(b); gx_wr8(alpha);
+}
+
+static void gx_emit_color_rect(u16 x0, u16 y0, u16 x1, u16 y1,
+                              u8 r, u8 g, u8 b)
+{
+	gx_emit_color_rect_alpha(x0, y0, x1, y1, r, g, b, 0xff);
 }
 
 static void gx_draw_color_rect(u16 x0, u16 y0, u16 x1, u16 y1,
@@ -2764,11 +3107,11 @@ static void gx_copy_efb_to_xfb(u32 xfb_phys, u16 width, u16 height, bool clear)
 	gx_load_bp_reg(0x45000002);
 }
 
-static void gx_copy_efb_rect_to_rgb565_texture_stride(void *dest, u16 left,
+static void gx_copy_efb_rect_to_rgb565_texture_stride_control(void *dest, u16 left,
 						      u16 top, u16 width,
 						      u16 height,
 						      u16 dest_width,
-						      bool clear)
+						      bool clear, u32 pe_control)
 {
 	u32 ctrl;
 
@@ -2798,8 +3141,17 @@ static void gx_copy_efb_rect_to_rgb565_texture_stride(void *dest, u16 left,
 	gx_load_bp_reg(ctrl);
 
 	/* GX_PixModeSync: order texture-copy writes before later consumers. */
-	gx_load_bp_reg(0x43000040);
+	gx_load_bp_reg(pe_control);
 	gx_load_bp_reg(0x45000002);
+}
+
+static void gx_copy_efb_rect_to_rgb565_texture_stride(void *dest, u16 left,
+                                                    u16 top, u16 width,
+                                                    u16 height, u16 dest_width,
+                                                    bool clear)
+{
+	gx_copy_efb_rect_to_rgb565_texture_stride_control(dest, left, top, width,
+						       height, dest_width, clear, 0x43000040);
 }
 
 static void gx_copy_efb_rect_to_rgb565_texture(void *dest, u16 left, u16 top,
@@ -3685,6 +4037,129 @@ static int gx_submit_and_wait_finish(const char *phase)
 		return -ETIMEDOUT;
 	}
 
+	return 0;
+}
+
+/* Called with gx_submit_lock held; leave the last batch for the caller's copy fence. */
+static int gx_draw_bounded_vertical_runs(u16 x, u16 y, u16 width,
+					u16 texture_width, u16 src_height,
+					u16 texture_height, u16 dst_height)
+{
+	static u32 sequence;
+	u32 id = ++sequence;
+	u32 pieces = DIV_ROUND_UP(width, 64);
+	u32 runs = gx_nearest_run_count(src_height, dst_height);
+	u32 remaining = pieces * runs;
+	u32 batch = 0, batch_quads, emitted = 0;
+	u16 dst_start = 0;
+	int ret;
+
+	BUILD_BUG_ON(600 * 80 + 3 > GX_FIFO_SIZE - 256);
+	/* Complete preservation/state before the bounded active vertex batches. */
+	if (fifo_pos > GX_FIFO_SIZE - 256)
+		return -E2BIG;
+	gx_load_bp_reg(0x45000002);
+	ret = gx_submit_and_wait_finish("render-bounded-state");
+	if (ret)
+		return ret;
+	fifo_pos = 0;
+	pr_info("gcn-gx: bounded-begin seq=%u x=%u y=%u width=%u src_height=%u dst_height=%u runs=%u quads=%u\n",
+		id, x, y, width, src_height, dst_height, runs, remaining);
+	batch_quads = min_t(u32, remaining, gx_scale_bounded_batch_quads);
+	gx_wr8(0x80);
+	gx_wr16be(4 * batch_quads);
+	while (dst_start < dst_height) {
+		u16 source = gx_nearest_source_index(dst_start, src_height, dst_height);
+		u16 dst_end = dst_start + 1;
+		u16 column;
+		u32 t = gx_semantic_texcoord_bits_phase(source, texture_height, 2);
+
+		while (dst_end < dst_height &&
+		       gx_nearest_source_index(dst_end, src_height, dst_height) == source)
+			dst_end++;
+		for (column = 0; column < width; column += 64) {
+			u16 right = min_t(u16, column + 64, width);
+
+			gx_emit_textured_rect(x + column, y + dst_start, x + right, y + dst_end,
+				gx_semantic_texcoord_bits_phase(column, texture_width, -2), t,
+				gx_semantic_texcoord_bits_phase(right, texture_width, -2), t);
+			remaining--;
+			if (++emitted != batch_quads)
+				continue;
+			pr_info("gcn-gx: bounded-batch seq=%u batch=%u quads=%u bytes=%u last=%u\n",
+				id, batch, batch_quads, fifo_pos + 5, !remaining);
+			if (!remaining)
+				break;
+			gx_load_bp_reg(0x45000002);
+			ret = gx_submit_and_wait_finish("render-bounded-final");
+			if (ret)
+				return ret;
+			fifo_pos = 0;
+			batch++;
+			emitted = 0;
+			batch_quads = min_t(u32, remaining, gx_scale_bounded_batch_quads);
+			gx_wr8(0x80);
+			gx_wr16be(4 * batch_quads);
+		}
+		dst_start = dst_end;
+	}
+	return 0;
+}
+
+/* Keep the validated 640-quad system split in one submission, including state. */
+static int gx_draw_bounded_horizontal_runs(u16 src_width, u16 texture_width,
+					  u16 height, u16 texture_height, u16 dst_width)
+{
+	static u32 sequence;
+	u32 id = ++sequence, batch = 0, emitted = 0;
+	u32 runs = gx_nearest_run_count(src_width, dst_width);
+	u32 remaining = runs * DIV_ROUND_UP(height, 120);
+	u32 count = min_t(u32, remaining, 640), before = fifo_pos;
+	u16 left = 0;
+	int ret;
+
+	BUILD_BUG_ON(640 * 80 + 8 > GX_FIFO_SIZE - 256);
+	if (fifo_pos > GX_FIFO_SIZE - 256 - 8 - count * 80)
+		return -E2BIG;
+	pr_info("gcn-gx: bounded-horizontal-begin seq=%u src_width=%u dst_width=%u height=%u runs=%u quads=%u\n",
+		id, src_width, dst_width, height, runs, remaining);
+	gx_wr8(0x80);
+	gx_wr16be(4 * count);
+	while (left < dst_width) {
+		u16 source = gx_nearest_source_index(left, src_width, dst_width);
+		u16 right = left + 1, top;
+		u32 s = gx_semantic_texcoord_bits_phase(source, texture_width, 2);
+
+		while (right < dst_width &&
+		       gx_nearest_source_index(right, src_width, dst_width) == source)
+			right++;
+		for (top = 0; top < height; top += 120) {
+			u16 bottom = min_t(u16, top + 120, height);
+
+			gx_emit_textured_rect(left, top, right, bottom, s,
+				gx_semantic_texcoord_bits_phase(top, texture_height, -2), s,
+				gx_semantic_texcoord_bits_phase(bottom, texture_height, -2));
+			remaining--;
+			if (++emitted != count)
+				continue;
+			pr_info("gcn-gx: bounded-horizontal-batch seq=%u batch=%u quads=%u before=%u bytes=%u last=%u\n",
+				id, batch, count, before, fifo_pos + 5, !remaining);
+			if (!remaining)
+				break;
+			gx_load_bp_reg(0x45000002);
+			ret = gx_submit_and_wait_finish("render-bounded-horizontal");
+			if (ret)
+				return ret;
+			fifo_pos = 0;
+			before = 0;
+			batch++;
+			emitted = 0;
+			count = min_t(u32, remaining, 640);
+			gx_wr8(0x80);
+			gx_wr16be(4 * count);
+		}
+		left = right;
+	}
 	return 0;
 }
 
@@ -5459,9 +5934,12 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 	bool final_submitted = false;
 	bool focused;
 	bool native_trace;
+	bool native_bad = false;
+	bool system_bad = false;
 	bool offset_focused;
 	bool offset_trace;
 	bool system_focused;
+	bool identity_quad;
 	bool system_trace;
 	bool split_horizontal;
 	bool split_vertical;
@@ -5532,6 +6010,8 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 	    (system_memory && dst_bytes > GX_TEX_BUF_SLOT_SIZE))
 		return -E2BIG;
 
+	identity_quad = READ_ONCE(gx_scale_identity_quad) &&
+		src_rect_width == dst_rect_width && src_rect_height == dst_rect_height;
 	mutex_lock(&gx_submit_lock);
 	focused = !system_memory && !src_x && !src_y &&
 		!dst_x && !dst_y && src_width == 640 && src_height == 240 &&
@@ -5570,16 +6050,36 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 	offset_trace = READ_ONCE(gx_scale_offset_trace) && offset_focused;
 	system_trace = READ_ONCE(gx_scale_system_trace) && system_focused;
 	trace = READ_ONCE(gx_scale_trace) && focused;
-	split_horizontal = (focused && gx_scale_split_reduce) ||
+	split_horizontal = !gx_scale_bounded_horizontal && ((focused && gx_scale_split_reduce) ||
 		(trace && gx_scale_gpu_split) ||
 		(system_focused && gx_scale_system_split) ||
-		(native_trace && gx_scale_native_horizontal_split);
+		(native_trace && gx_scale_native_horizontal_split));
 	split_vertical = (focused && gx_scale_split_reduce) ||
 		(trace && gx_scale_texture_half_rows) ||
 		(offset_focused && gx_scale_offset_split) ||
 		(native_trace && gx_scale_native_split);
 	if (trace || system_trace || offset_trace || native_trace)
 		trace_sequence = ++gx_scale_trace_sequence;
+	if (native_trace && gx_scale_native_idle_wait_only &&
+	    !gx_scale_native_idle_check) {
+		ret = -EINVAL;
+		goto out_unlock;
+	}
+	if (native_trace && gx_scale_native_failure_probe &&
+	    !gx_scale_native_state_fence) {
+		ret = -EINVAL;
+		goto out_unlock;
+	}
+	if (native_trace && gx_scale_native_idle_check &&
+	    (!gx_scale_native_state_fence || gx_scale_native_idle_us > 100000)) {
+		ret = -EINVAL;
+		goto out_unlock;
+	}
+	if (native_trace && gx_scale_native_state_fence &&
+	    !gx_scale_native_preserve_fence) {
+		ret = -EINVAL;
+		goto out_unlock;
+	}
 	if (trace && (gx_scale_direct_color || gx_scale_clear_color) &&
 	    (!gx_scale_cpu_source || !gx_scale_cpu_uniform ||
 	     (gx_scale_direct_color && gx_scale_clear_color))) {
@@ -5790,10 +6290,10 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 					trace_sequence, 0);
 	}
 	if (native_trace)
-		gx_compare_native_scale(src_addr, prior_snapshot, crop, NULL,
+		native_bad |= gx_compare_native_scale(src_addr, prior_snapshot, crop, NULL,
 					src_x, src_y, trace_sequence, 0);
 	if (system_trace)
-		gx_compare_system_scale(src_addr, crop, crop_width, src_width,
+		system_bad |= gx_compare_system_scale(src_addr, crop, crop_width, src_width,
 					src_height, NULL, trace_sequence, "crop");
 	/* Expand or reduce source columns exactly into a private intermediate. */
 	fifo_pos = 0;
@@ -5815,9 +6315,24 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 			goto out_unlock;
 		}
 	}
-	gx_draw_nearest_horizontal_runs(src_rect_width, crop_width,
-					src_rect_height, crop_height,
-					dst_rect_width, split_horizontal);
+	if (identity_quad) {
+		gx_wr8(0x80);
+		gx_wr16be(4);
+		gx_emit_textured_rect(0, 0, dst_rect_width, src_rect_height,
+				gx_semantic_texcoord_bits_phase(0, crop_width, -2),
+				gx_semantic_texcoord_bits_phase(0, crop_height, -2),
+				gx_semantic_texcoord_bits_phase(src_rect_width, crop_width, -2),
+				gx_semantic_texcoord_bits_phase(src_rect_height, crop_height, -2));
+	} else if (gx_scale_bounded_horizontal) {
+		ret = gx_draw_bounded_horizontal_runs(src_rect_width, crop_width,
+						    src_rect_height, crop_height, dst_rect_width);
+		if (ret)
+			goto out_unlock;
+	} else {
+		gx_draw_nearest_horizontal_runs(src_rect_width, crop_width,
+					       src_rect_height, crop_height,
+					       dst_rect_width, split_horizontal);
+	}
 	gx_load_bp_reg(0x45000002);
 	if (trace) {
 		horizontal_command_hash = gx_hash_pending_commands();
@@ -5826,13 +6341,13 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 	if (system_trace)
 		pr_info("gcn-gx: system-horizontal seq=%u split=%u quads=%u bytes=%u hash=%08x\n",
 			trace_sequence, split_horizontal,
-			(split_horizontal ? 2 : 1) *
+			identity_quad ? 1 : (split_horizontal ? 2 : 1) *
 			gx_nearest_run_count(src_rect_width, dst_rect_width),
 			fifo_pos, gx_hash_pending_commands());
 	if (native_trace)
 		pr_info("gcn-gx: native-horizontal seq=%u split=%u quads=%u bytes=%u hash=%08x\n",
 			trace_sequence, split_horizontal,
-			(split_horizontal ? 2 : 1) *
+			identity_quad ? 1 : (split_horizontal ? 2 : 1) *
 			gx_nearest_run_count(src_rect_width, dst_rect_width),
 			fifo_pos, gx_hash_pending_commands());
 	ret = gx_submit_and_wait_finish("render-blit-scaled-horizontal-draw");
@@ -5875,7 +6390,7 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 	if (system_trace) {
 		invalidate_dcache_range((unsigned long)horizontal,
 					(unsigned long)horizontal + horizontal_bytes);
-		gx_compare_system_scale(src_addr, horizontal, horizontal_width,
+		system_bad |= gx_compare_system_scale(src_addr, horizontal, horizontal_width,
 					dst_width, src_height, efb_snapshot, trace_sequence,
 					"horizontal");
 	}
@@ -5890,7 +6405,7 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 	if (native_trace) {
 		invalidate_dcache_range((unsigned long)horizontal,
 					(unsigned long)horizontal + horizontal_bytes);
-		gx_compare_native_scale(src_addr, prior_snapshot, horizontal,
+		native_bad |= gx_compare_native_scale(src_addr, prior_snapshot, horizontal,
 					efb_snapshot, src_x, src_y, trace_sequence, 1);
 	}
 
@@ -5993,7 +6508,7 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 				   (unsigned long)crop + dst_bytes);
 	}
 	if (native_trace)
-		gx_compare_native_prior(prior_snapshot, crop, NULL, trace_sequence);
+		native_bad |= gx_compare_native_prior(prior_snapshot, crop, NULL, trace_sequence, 0);
 	fifo_pos = 0;
 	gx_load_libogc_init_preamble();
 	gx_setup_display_copy_state();
@@ -6014,8 +6529,8 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 						       dst_height);
 			if (ret)
 				goto out_unlock;
-			gx_compare_native_prior(prior_snapshot, crop, efb_snapshot,
-						trace_sequence);
+			native_bad |= gx_compare_native_prior(prior_snapshot, crop, efb_snapshot,
+						trace_sequence, 1);
 			/* Continue with the preserved GPU state in a fresh FIFO. */
 			fifo_pos = 0;
 		}
@@ -6128,6 +6643,43 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 		gx_setup_texture_coordinate_scale(horizontal_width, crop_height,
 						  false, false);
 		gx_set_scissor(dst_x, dst_y, dst_rect_width, dst_rect_height);
+		if (native_trace && gx_scale_native_state_fence) {
+			gx_load_bp_reg(0x45000002);
+			pr_info("gcn-gx: native-state seq=%u bytes=%u hash=%08x\n",
+				trace_sequence, fifo_pos, gx_hash_pending_commands());
+			ret = gx_submit_and_wait_finish("render-native-state");
+			if (ret)
+				goto out_unlock;
+			ret = gx_snapshot_scale_colors(efb_snapshot, dst_width,
+						       dst_height);
+			if (ret)
+				goto out_unlock;
+			native_bad |= gx_compare_native_prior(prior_snapshot, crop, efb_snapshot,
+						trace_sequence, 2);
+			if (gx_scale_native_idle_check) {
+				u64 start = ktime_get_ns();
+				u64 elapsed;
+
+				/* Leave EFB and the submitted GPU state untouched. */
+				if (gx_scale_native_idle_us)
+					usleep_range(gx_scale_native_idle_us,
+						     gx_scale_native_idle_us + 1000);
+				elapsed = ktime_get_ns() - start;
+				pr_info("gcn-gx: native-idle seq=%u requested_us=%u elapsed_ns=%llu readback=%u\n",
+					trace_sequence, gx_scale_native_idle_us, elapsed,
+					!gx_scale_native_idle_wait_only);
+				if (!gx_scale_native_idle_wait_only) {
+					ret = gx_snapshot_scale_colors(efb_snapshot,
+								       dst_width, dst_height);
+					if (ret)
+						goto out_unlock;
+					native_bad |= gx_compare_native_prior(prior_snapshot, crop,
+								efb_snapshot, trace_sequence, 3);
+				}
+			}
+			/* Submit only active vertices with the retained final state. */
+			fifo_pos = 0;
+		}
 		if (split_vertical) {
 			u32 vertex_bytes = 160 * gx_nearest_run_count(src_rect_height,
 								     dst_rect_height);
@@ -6139,11 +6691,151 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 				goto out_unlock;
 			}
 		}
-		gx_draw_nearest_vertical_runs(dst_x, dst_y, dst_rect_width,
-					      horizontal_width, src_rect_height,
-					      crop_height,
-					      dst_rect_height,
-					      split_vertical);
+		if (trace && gx_scale_reduce_span) {
+			u32 row, column;
+			u32 quads = 120 * (320 / gx_scale_reduce_span);
+
+			if (fifo_pos > GX_FIFO_SIZE - 256 - 3 - 80 * quads) {
+				ret = -E2BIG;
+				goto out_unlock;
+			}
+			pr_info("gcn-gx: reduce-span seq=%u span=%u quads=%u fifo_before=%u bytes=%u\n",
+				trace_sequence, gx_scale_reduce_span, quads, fifo_pos,
+				fifo_pos + 8 + 80 * quads);
+			gx_wr8(0x80);
+			gx_wr16be(4 * quads);
+			for (row = 0; row < 120; row++) {
+				u32 t = gx_semantic_texcoord_bits_phase(2 * row + 1, crop_height, 2);
+
+				for (column = 0; column < 320; column += gx_scale_reduce_span)
+					gx_emit_textured_rect(column, row, column + gx_scale_reduce_span, row + 1,
+						gx_semantic_texcoord_bits_phase(column, horizontal_width, -2), t,
+						gx_semantic_texcoord_bits_phase(column + gx_scale_reduce_span,
+									 horizontal_width, -2), t);
+			}
+		} else if (system_trace && gx_scale_system_span) {
+			u32 batch, row, column;
+			u32 quads = 40 * (640 / gx_scale_system_span);
+
+			for (batch = 0; batch < 6; batch++) {
+				u32 before = fifo_pos;
+
+				if (fifo_pos > GX_FIFO_SIZE - 256 - 3 - 80 * quads) {
+					ret = -E2BIG;
+					goto out_unlock;
+				}
+				gx_wr8(0x80);
+				gx_wr16be(4 * quads);
+				for (row = batch * 40; row < (batch + 1) * 40; row++) {
+					u32 t = gx_semantic_texcoord_bits_phase(row, crop_height, 2);
+
+					for (column = 0; column < 640; column += gx_scale_system_span)
+						gx_emit_textured_rect(column, row * 2,
+							column + gx_scale_system_span, row * 2 + 2,
+							gx_semantic_texcoord_bits_phase(column, horizontal_width, -2), t,
+							gx_semantic_texcoord_bits_phase(column + gx_scale_system_span,
+										 horizontal_width, -2), t);
+				}
+				pr_info("gcn-gx: system-span seq=%u batch=%u first=%u end=%u span=%u quads=%u fifo_before=%u bytes=%u\n",
+					trace_sequence, batch, batch * 80, (batch + 1) * 80,
+					gx_scale_system_span, quads, before, fifo_pos + 5);
+				if (batch < 5) {
+					gx_load_bp_reg(0x45000002);
+					ret = gx_submit_and_wait_finish("render-system-span");
+					if (ret)
+						goto out_unlock;
+					fifo_pos = 0;
+				}
+			}
+		} else if (offset_trace && gx_scale_offset_span) {
+			u32 row, column;
+			u32 quads = 79 * (256 / gx_scale_offset_span);
+
+			if (fifo_pos > GX_FIFO_SIZE - 256 - 3 - 80 * quads) {
+				ret = -E2BIG;
+				goto out_unlock;
+			}
+			pr_info("gcn-gx: offset-span seq=%u span=%u quads=%u vertex_bytes=%u fifo_before=%u\n",
+				trace_sequence, gx_scale_offset_span, quads, 80 * quads, fifo_pos);
+			gx_wr8(0x80);
+			gx_wr16be(4 * quads);
+			for (row = 0; row < 79; row++) {
+				u32 t = gx_semantic_texcoord_bits_phase(row, crop_height, 2);
+
+				for (column = 0; column < 256; column += gx_scale_offset_span)
+					gx_emit_textured_rect(column, dst_y + row,
+						column + gx_scale_offset_span, dst_y + row + 1,
+						gx_semantic_texcoord_bits_phase(column, horizontal_width, -2), t,
+						gx_semantic_texcoord_bits_phase(column + gx_scale_offset_span,
+									 horizontal_width, -2), t);
+			}
+		} else if (native_trace && gx_scale_native_span) {
+			u32 batch, row_index, column_index;
+			u32 batch_rows = gx_scale_native_batch_rows;
+			u32 batches = 240 / batch_rows;
+			u32 pieces = 320 / gx_scale_native_span;
+			u32 quads = batch_rows * pieces;
+
+			/* Retain final state; bound each vertex stream below the 64 KiB FIFO. */
+			for (batch = 0; batch < batches; batch++) {
+				if (fifo_pos > GX_FIFO_SIZE - 256 - 3 - 80 * quads) {
+					ret = -E2BIG;
+					goto out_unlock;
+				}
+				gx_wr8(0x80);
+				gx_wr16be(4 * quads);
+				for (row_index = 0; row_index < batch_rows; row_index++) {
+					u32 row = batch * batch_rows + (gx_scale_native_reverse ?
+						batch_rows - 1 - row_index : row_index);
+					u32 t = gx_semantic_texcoord_bits_phase(row, crop_height, 2);
+
+					for (column_index = 0; column_index < pieces; column_index++) {
+						u32 column = (gx_scale_native_reverse ? pieces - 1 - column_index :
+							column_index) * gx_scale_native_span;
+
+						gx_emit_textured_rect(dst_x + column, dst_y + row,
+							dst_x + column + gx_scale_native_span, dst_y + row + 1,
+							gx_semantic_texcoord_bits_phase(column, horizontal_width, -2), t,
+							gx_semantic_texcoord_bits_phase(column + gx_scale_native_span,
+										 horizontal_width, -2), t);
+					}
+				}
+				if (gx_scale_native_reverse)
+					pr_info("gcn-gx: native-span-order seq=%u batch=%u order=reverse scope=within-batch\n",
+						trace_sequence, batch);
+				pr_info("gcn-gx: native-span seq=%u batch=%u first=%u end=%u span=%u quads=%u bytes=%u\n",
+					trace_sequence, batch, batch * batch_rows, (batch + 1) * batch_rows,
+					gx_scale_native_span, quads, fifo_pos + 5);
+				if (batch + 1 < batches) {
+					gx_load_bp_reg(0x45000002);
+					ret = gx_submit_and_wait_finish("render-native-span");
+					if (ret)
+						goto out_unlock;
+					fifo_pos = 0;
+				}
+			}
+		} else if (identity_quad || (native_trace && gx_scale_native_single_quad)) {
+			/* Equal extents permit exact 1:1 sampling without thin runs. */
+			gx_wr8(0x80);
+			gx_wr16be(4);
+			gx_emit_textured_rect(dst_x, dst_y,
+					dst_x + dst_rect_width, dst_y + dst_rect_height,
+					gx_semantic_texcoord_bits_phase(0, horizontal_width, -2),
+					gx_semantic_texcoord_bits_phase(0, crop_height, -2),
+					gx_semantic_texcoord_bits_phase(dst_rect_width, horizontal_width, -2),
+					gx_semantic_texcoord_bits_phase(dst_rect_height, crop_height, -2));
+		} else if (gx_scale_bounded_final) {
+			ret = gx_draw_bounded_vertical_runs(dst_x, dst_y, dst_rect_width,
+						 horizontal_width, src_rect_height,
+						 crop_height, dst_rect_height);
+			if (ret)
+				goto out_unlock;
+		} else {
+			gx_draw_nearest_vertical_runs(dst_x, dst_y, dst_rect_width,
+						      horizontal_width, src_rect_height,
+						      crop_height, dst_rect_height,
+						      split_vertical);
+		}
 	}
 	if (!final_submitted) {
 		if (trace && (gx_scale_direct_color || split_vertical)) {
@@ -6165,12 +6857,14 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 		if (native_trace)
 			pr_info("gcn-gx: native-final seq=%u split=%u quads=%u bytes=%u hash=%08x\n",
 				trace_sequence, split_vertical,
-				(split_vertical ? 2 : 1) *
+				gx_scale_native_span ? gx_scale_native_batch_rows * (320 / gx_scale_native_span) :
+				(identity_quad || gx_scale_native_single_quad) ? 1 : (split_vertical ? 2 : 1) *
 				gx_nearest_run_count(src_rect_height, dst_rect_height),
 				fifo_pos, gx_hash_pending_commands());
 		if (offset_trace)
 			pr_info("gcn-gx: offset-final seq=%u split=%u quads=%u bytes=%u hash=%08x\n",
 				trace_sequence, split_vertical,
+				gx_scale_offset_span ? 79 * (256 / gx_scale_offset_span) :
 				(split_vertical ? 2 : 1) *
 				gx_nearest_run_count(src_rect_height, dst_rect_height),
 				fifo_pos, gx_hash_pending_commands());
@@ -6185,6 +6879,9 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 		if (ret)
 			goto out_unlock;
 	}
+	if (native_trace && gx_scale_native_failure_probe)
+		gx_probe_native_failure(src_addr, prior_snapshot, crop, horizontal,
+					efb_snapshot, src_x, src_y, trace_sequence);
 	if (trace && gx_scale_efb_peek) {
 		ret = gx_peek_scale_colors(samples, ARRAY_SIZE(samples));
 		if (ret)
@@ -6206,11 +6903,11 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 		invalidate_dcache_range((unsigned long)crop,
 					(unsigned long)crop + dst_bytes);
 		if (system_trace)
-			gx_compare_system_scale(src_addr, crop, dst_width, dst_width,
+			system_bad |= gx_compare_system_scale(src_addr, crop, dst_width, dst_width,
 						dst_height, efb_snapshot, trace_sequence,
 						"final");
 		if (native_trace)
-			gx_compare_native_scale(src_addr, prior_snapshot, crop,
+			native_bad |= gx_compare_native_scale(src_addr, prior_snapshot, crop,
 						efb_snapshot, src_x, src_y,
 						trace_sequence, 2);
 		gx_copy_tiled_to_layout(crop, dst_addr, dst_width, dst_height, dst_layout);
@@ -6304,6 +7001,18 @@ static int gcn_gx_drm_blit_scaled_rgb565_core(const void *src_addr,
 				horizontal_hash, horizontal_delayed_hash,
 				final_hash, final_delayed_hash);
 		}
+	}
+
+	if (system_trace && system_bad && gx_scale_bounded_final) {
+		pr_info("gcn-gx: bounded-stop seq=%u reason=oracle-mismatch errno=%d\n",
+			trace_sequence, EILSEQ);
+		ret = -EILSEQ;
+		goto out_unlock;
+	}
+	if (native_trace && native_bad && gx_scale_native_stop_on_error) {
+		pr_info("gcn-gx: native-stop seq=%u reason=oracle-mismatch errno=%d\n",
+			trace_sequence, EILSEQ);
+		ret = -EILSEQ;
 	}
 
 out_unlock:
@@ -6906,13 +7615,685 @@ static const struct gcnfb_accel_ops gcn_gx_accel_ops = {
 };
 #endif
 
+/* CPU color access control, following libogc GX_PokeARGB and PE poke state. */
+static int gx_test_cpu_fill_efb(u32 argb)
+{
+	void __iomem *efb = ioremap(0x08000000, 480 << 12);
+	u16 saved[4];
+	u16 x, y;
+	int i;
+
+	if (!efb)
+		return -ENOMEM;
+	for (i = 0; i < ARRAY_SIZE(saved); i++)
+		saved[i] = pe_read(i);
+	pe_write(0, 0x000e); /* Depth test/write disabled. */
+	pe_write(1, 0x0018); /* Color/alpha writes, no blending, logic or dither. */
+	pe_write(2, 0);      /* No destination alpha override. */
+	pe_write(3, 0x0700); /* Alpha comparison ALWAYS. */
+	for (y = 0; y < 480; y++)
+		for (x = 0; x < 640; x++)
+			iowrite32be(argb | 0xff000000,
+				    efb + ((u32)y << 12) + ((u32)x << 2));
+	/* Complete ordered aperture access before restoring CPU poke controls. */
+	(void)ioread32be(efb + (479 << 12) + (639 << 2));
+	for (i = 0; i < ARRAY_SIZE(saved); i++)
+		pe_write(i, saved[i]);
+	iounmap(efb);
+	return 0;
+}
+
+/* Diagnostic only: clear or untextured primitives, before registration. */
+static int gx_test_efb_clear(void)
+{
+	u32 focus_width = gx_efb_primitive_focus_wide ? 536 : gx_efb_primitive_focus_width;
+	const size_t bytes = 640 * 480 * sizeof(u16);
+	u32 copy_control = gx_efb_primitive_rgba6 ? 0x43000041 : 0x43000040;
+	u32 background = gx_efb_primitive_white_background && !gx_efb_primitive_logic_black ?
+			 0xffffff : 0;
+	u16 *copy = gx_tex_buf;
+	u32 *snapshot;
+	u8 *seen_bad = NULL;
+	u32 iteration;
+	int ret = 0;
+
+	snapshot = vzalloc(640 * 480 * sizeof(*snapshot));
+	if (!snapshot)
+		return -ENOMEM;
+	if (gx_efb_primitive_batch_snapshot) {
+		seen_bad = vzalloc(640 * 480);
+		if (!seen_bad) {
+			vfree(snapshot);
+			return -ENOMEM;
+		}
+	}
+	mutex_lock(&gx_submit_lock);
+	flush_dcache_range((unsigned long)copy, (unsigned long)copy + bytes);
+	pr_info("gcn-gx: efb-clear-start iterations=%u width=640 height=480 primitive=%u\n",
+		gx_efb_clear_iterations, gx_efb_primitive_test);
+	if (gx_efb_primitive_white_background)
+		pr_info("gcn-gx: efb-background-mode expected=%08x\n", background);
+	if (gx_efb_primitive_interior_only)
+		pr_info("gcn-gx: efb-clear-pattern colored_pixels=268800 black_edge_pixels=38400 batch_rows=16 interior_even=%u\n",
+			gx_efb_primitive_interior_even);
+	if (gx_efb_primitive_stripe_colors)
+		pr_info("gcn-gx: efb-clear-stripes rows=%u colors=red-white\n",
+			gx_efb_primitive_two_rows ? 2 : 1);
+	if (gx_efb_primitive_no_color_write)
+		pr_info("gcn-gx: efb-write-mask color=0 alpha=0 expected=00ffffff\n");
+	if (gx_efb_primitive_focus)
+		pr_info("gcn-gx: efb-focus left=%u top=%u width=%u height=4 colored_pixels=%u black_pixels=%u\n",
+			536 - focus_width, gx_efb_primitive_focus_top,
+			focus_width,
+			focus_width * 4,
+			307200 - focus_width * 4);
+	if (gx_efb_primitive_full_split)
+		pr_info("gcn-gx: efb-full-split span=64 strips_per_batch=8 pieces_per_strip=10 pads=8 quads=88 order=row-major\n");
+	if (gx_efb_primitive_focus_viewport)
+		pr_info("gcn-gx: efb-focus-viewport shift_y=%u vertex_top=%u physical_top=52 width=640 height=480 scissor_top=0 scissor_height=480\n",
+			gx_efb_primitive_focus_viewport_shift, 52 - gx_efb_primitive_focus_viewport_shift);
+	if (gx_efb_primitive_focus_pad)
+		pr_info("gcn-gx: efb-focus-pad pads=16 real=2 order=prefix\n");
+	if (gx_efb_primitive_focus_right)
+		pr_info("gcn-gx: efb-focus-anchor side=right remainder=%u\n",
+			(focus_width - 1) % gx_efb_primitive_focus_span + 1);
+	if (gx_efb_primitive_focus_split)
+		pr_info("gcn-gx: efb-focus-split boundary=%u span=%u quads=%u order=%s\n",
+			536 - focus_width + (gx_efb_primitive_focus_right ?
+			(focus_width - 1) % gx_efb_primitive_focus_span + 1 : gx_efb_primitive_focus_span),
+			gx_efb_primitive_focus_span, 2 * DIV_ROUND_UP(focus_width, gx_efb_primitive_focus_span),
+			gx_efb_primitive_focus_order == 1 ? "reverse" :
+			gx_efb_primitive_focus_order == 2 ? "column-major" : "row-major");
+	if (gx_efb_primitive_rgba6)
+		pr_info("gcn-gx: efb-storage format=RGBA6_Z24 multisample=0 oracle=black-white\n");
+	if (gx_efb_primitive_logic)
+		pr_info("gcn-gx: efb-logic operation=%s color_update=1 alpha_update=1\n",
+			gx_efb_primitive_logic_clear ? "CLEAR" :
+			gx_efb_primitive_logic_invert ? "INVERT" :
+			gx_efb_primitive_logic_set ? "SET" : "COPY");
+	if (gx_efb_primitive_alpha_mixed)
+		pr_info("gcn-gx: efb-alpha-mixed rows=2 reverse=%u phase_period=4 accepted_pixels=153600 rejected_pixels=153600\n",
+			gx_efb_primitive_alpha_mixed_reverse);
+	if (gx_efb_primitive_alpha_threshold)
+		pr_info("gcn-gx: efb-alpha-threshold compare=%s ref=128 vertex_alpha=%s late=1\n",
+			gx_efb_primitive_alpha_threshold_pass ? "GEQUAL" : "LESS",
+			gx_efb_primitive_alpha_mixed ? "0-255" : "255");
+	if (gx_efb_primitive_alpha_never)
+		pr_info("gcn-gx: efb-reject-alpha compare=NEVER late=1 expected=00ffffff\n");
+	if (gx_efb_primitive_z_never)
+		pr_info("gcn-gx: efb-reject-depth compare=NEVER early=%u expected=00ffffff\n",
+			!gx_efb_primitive_late_z);
+	if (gx_efb_primitive_no_draw)
+		pr_info("gcn-gx: efb-no-draw batches=30 expected=00ffffff\n");
+	for (iteration = 0; iteration < gx_efb_clear_iterations; iteration++) {
+		u32 expected = gx_efb_primitive_logic_clear ? 0 :
+			       gx_efb_primitive_logic_invert ? (background ^ 0xffffff) :
+			       gx_efb_primitive_no_color_write || gx_efb_primitive_z_never ||
+			       gx_efb_primitive_no_draw || gx_efb_primitive_alpha_never || gx_efb_primitive_logic_set ||
+			       (gx_efb_primitive_alpha_threshold && !gx_efb_primitive_alpha_threshold_pass) ||
+			       (iteration & 1) ?
+			       0x00ffffff : 0x00ff0000;
+		u32 efb_bad = 0;
+		u32 copy_bad = 0;
+		u32 copy_diff = 0;
+		u32 batch_observed_bad = 0;
+		u32 newly_bad = 0;
+		u32 rejected_raw = 0, rejected_copy = 0;
+		u16 x;
+		u16 y;
+
+		if (seen_bad)
+			memset(seen_bad, 0, 640 * 480);
+		fifo_pos = 0;
+		gx_load_libogc_init_preamble();
+		gx_setup_display_copy_state();
+		if (gx_efb_primitive_rgba6)
+			gx_load_bp_reg(copy_control);
+		if (gx_efb_primitive_test)
+			gx_set_copy_clear_rgb(background >> 16, background >> 8, background);
+		else
+			gx_set_copy_clear_rgb(0xff, iteration & 1 ? 0xff : 0,
+					      iteration & 1 ? 0xff : 0);
+		/* Discard copied old contents; this submission produces the clear. */
+		gx_copy_efb_rect_to_rgb565_texture_stride_control(copy, 0, 0, 640, 480,
+							       640, true, copy_control);
+		ret = gx_submit_and_wait_finish("efb-clear-write");
+		if (ret)
+			break;
+		ret = gx_snapshot_scale_colors(snapshot, 640, 480);
+		if (ret)
+			break;
+		if (gx_efb_primitive_test) {
+			u32 background_bad = 0;
+			u32 batches = gx_efb_primitive_focus ? 1 : gx_efb_primitive_batch ? 30 : 1;
+			u32 batch;
+			u32 quads = gx_efb_primitive_focus_pad ? 18 : gx_efb_primitive_full_split ? 88 : gx_efb_primitive_focus_split ? 2 * DIV_ROUND_UP(focus_width, gx_efb_primitive_focus_span) : gx_efb_primitive_focus ? 2 : gx_efb_primitive_no_draw ? 0 :
+				    gx_efb_primitive_single_quad ? 1 :
+				    gx_efb_primitive_two_quads ? 2 :
+				    gx_efb_primitive_repeat_bands ? 16 :
+				    gx_efb_primitive_bands ? 1 :
+				    gx_efb_primitive_full_width ? 16 :
+				    gx_efb_primitive_batch ? 32 : 960;
+			u8 gb = iteration & 1 ? 0xff : 0;
+
+			for (y = 0; y < 480; y++) {
+				for (x = 0; x < 640; x++) {
+					u32 raw = snapshot[(size_t)y * 640 + x];
+
+					if ((raw & 0xffffff) != background && !background_bad)
+						pr_info("gcn-gx: efb-background-first iteration=%u x=%u y=%u raw=%08x\n",
+							iteration, x, y, raw);
+					background_bad += (raw & 0xffffff) != background;
+				}
+			}
+			pr_info("gcn-gx: efb-background iteration=%u pixels=307200 mismatches=%u\n",
+				iteration, background_bad);
+			if (background_bad) {
+				ret = -EIO;
+				break;
+			}
+			if (gx_efb_primitive_cpu_write) {
+				ret = gx_test_cpu_fill_efb(expected);
+				if (ret)
+					break;
+				pr_info("gcn-gx: efb-cpu-write iteration=%u pixels=307200 expected=%08x\n",
+					iteration, expected);
+				goto primitive_snapshot;
+			}
+			fifo_pos = 0;
+			gx_setup_vertex_color_state(640, gx_efb_primitive_extended_viewport ? 528 : 480);
+			if (gx_efb_primitive_focus_viewport)
+				gx_set_viewport(0, gx_efb_primitive_focus_viewport_shift, 640, 480);
+			if (gx_efb_primitive_logic)
+				gx_load_bp_reg(gx_efb_primitive_logic_clear ? 0x4100011a :
+					       gx_efb_primitive_logic_invert ? 0x4100a11a :
+					       gx_efb_primitive_logic_set ? 0x4100f11a : 0x4100311a);
+			if (gx_efb_primitive_no_color_write)
+				gx_load_bp_reg(0x41003100); /* BP 0x41: color/alpha update bits 3/4 off. */
+			if (gx_efb_primitive_constant) {
+				/* GX_SetTevColor(GX_TEVREG0): retain libogc's repeated high write. */
+				u32 high = 0xe3000000 | ((u32)gb << 12) | gb;
+
+				gx_load_bp_reg(0xe20ff0ff);
+				gx_load_bp_reg(high);
+				gx_load_bp_reg(high);
+				gx_load_bp_reg(high);
+				/* A/B/C zero, D = C0; all other TEV operation bits unchanged. */
+				gx_load_bp_reg(0xc008fff2);
+			}
+			if (gx_efb_primitive_alpha_threshold)
+				gx_load_bp_reg(gx_efb_primitive_alpha_threshold_pass ?
+					       0xf33e0080 : 0xf3390080); /* GEQUAL/LESS 128 AND ALWAYS. */
+			if (gx_efb_primitive_alpha_never)
+				gx_load_bp_reg(0xf3000000); /* Both alpha compares NEVER, AND. */
+			if (gx_efb_primitive_z_never)
+				gx_load_bp_reg(0x40000001); /* Test enabled, NEVER, no depth write. */
+			if (gx_efb_primitive_z_test)
+				gx_load_bp_reg(gx_efb_primitive_z_write ? 0x4000001f : 0x4000000f);
+			if (gx_efb_primitive_late_z)
+				gx_load_bp_reg(0x43000000);
+			if (gx_efb_primitive_rgba6)
+				gx_load_bp_reg(gx_efb_primitive_late_z ? 0x43000001 : 0x43000041);
+			gx_set_scissor(0, 0, 640, gx_efb_primitive_extended_viewport ? 528 : 480);
+			for (batch = 0; batch < batches; batch++) {
+				u16 first = gx_efb_primitive_focus ? gx_efb_primitive_focus_top : gx_efb_primitive_batch ? batch * 16 : 0;
+				u16 end = gx_efb_primitive_focus ? gx_efb_primitive_focus_top + 4 : gx_efb_primitive_batch ? first + 16 : 480;
+
+				/* Four 12-byte vertices per quad, plus header/trailer. */
+				if (fifo_pos > GX_FIFO_SIZE - 256 - 3 - quads * 48) {
+					ret = -E2BIG;
+					break;
+				}
+				if (gx_efb_primitive_no_draw)
+					goto primitive_emitted;
+				if (gx_efb_primitive_scissor_rows) {
+					/* Both arms use identical pads, headers and scissor writes. */
+					gx_wr8(0x80);
+					gx_wr16be(8 * 4);
+					for (y = 0; y < 8; y++)
+						gx_emit_color_rect(0, first, 0, first, 0xff, gb, gb);
+					for (y = first; y < end; y += 2) {
+						gx_set_scissor(0, y, 640, 2);
+						gx_wr8(0x80);
+						gx_wr16be(4);
+						gx_emit_color_rect(0,
+							gx_efb_primitive_tall_rows ? first : y, 640,
+							gx_efb_primitive_tall_rows ? end : y + 2,
+							0xff, gb, gb);
+					}
+					gx_set_scissor(0, 0, 640, 480);
+					goto primitive_emitted;
+				}
+				gx_wr8(0x80);
+				gx_wr16be(quads * 4);
+				if (gx_efb_primitive_full_split) {
+					for (y = 0; y < 8; y++)
+						gx_emit_color_rect(0, first, 0, first, 0xff, gb, gb);
+					for (y = first; y < end; y += 2) {
+						u8 row_gb = gx_efb_primitive_stripe_colors ?
+							(((y / 2 + iteration) & 1) ? 0xff : 0) : gb;
+
+						for (x = 0; x < 640; x += 64)
+							gx_emit_color_rect(x, y, x + 64, y + 2,
+									   0xff, row_gb, row_gb);
+					}
+				} else if (gx_efb_primitive_focus_split) {
+					u32 pieces = DIV_ROUND_UP(focus_width, gx_efb_primitive_focus_span);
+					u32 index;
+
+					for (index = 0; index < 2 * pieces; index++) {
+						u32 position = gx_efb_primitive_focus_order == 1 ?
+							2 * pieces - 1 - index : index;
+						u32 row = gx_efb_primitive_focus_order == 2 ? position % 2 : position / pieces;
+						u32 column = gx_efb_primitive_focus_order == 2 ? position / 2 : position % pieces;
+
+						u32 right = gx_efb_primitive_focus_right ?
+							536 - (pieces - 1 - column) * gx_efb_primitive_focus_span :
+							min_t(u32, 536 - focus_width + (column + 1) * gx_efb_primitive_focus_span, 536);
+
+						x = gx_efb_primitive_focus_right ?
+							max_t(int, 536 - focus_width, (int)right - (int)gx_efb_primitive_focus_span) :
+							536 - focus_width + column * gx_efb_primitive_focus_span;
+						y = first + row * 2;
+						gx_emit_color_rect(x, y, right,
+								   y + 2, 0xff, gb, gb);
+					}
+				} else if (gx_efb_primitive_focus) {
+					u16 vertex_first = first - gx_efb_primitive_focus_viewport_shift;
+
+					if (gx_efb_primitive_focus_pad)
+						for (y = 0; y < 16; y++)
+							gx_emit_color_rect(0, first, 0, first, 0xff, gb, gb);
+					gx_emit_color_rect(536 - focus_width, vertex_first, 536, vertex_first + 2, 0xff, gb, gb);
+					gx_emit_color_rect(536 - focus_width, vertex_first + 2, 536, vertex_first + 4, 0xff, gb, gb);
+				} else if (gx_efb_primitive_single_quad) {
+					gx_emit_color_rect(0, 0, 640, 480, 0xff, gb, gb);
+				} else if (gx_efb_primitive_two_quads) {
+					gx_emit_color_rect(0, 0, 320, 480, 0xff, gb, gb);
+					gx_emit_color_rect(320, 0, 640, 480, 0xff, gb, gb);
+				} else if (gx_efb_primitive_four_rows) {
+					for (y = 0; y < 12; y++)
+						gx_emit_color_rect(0, first, 0, first,
+								   0xff, gb, gb);
+					for (y = first; y < end; y += 4)
+						gx_emit_color_rect(0, y, 640, y + 4, 0xff, gb, gb);
+				} else if (gx_efb_primitive_odd_rows) {
+					/* Keep 16 quads, replacing edge strips with pads when requested. */
+					for (y = 0; y < 7; y++)
+						gx_emit_color_rect(0, first, 0, first, 0xff, gb, gb);
+					if (gx_efb_primitive_interior_only)
+						gx_emit_color_rect(0, first, 0, first, 0xff, gb, gb);
+					else
+						gx_emit_color_rect(0, first, 640, first + 1, 0xff, gb, gb);
+					if (gx_efb_primitive_edge_pair) {
+						gx_emit_color_rect(0, first + 1, 640, first + 2,
+								   0xff, gb, gb);
+						for (y = first + 2; y < end; y += 2)
+							gx_emit_color_rect(0, y, 640, y + 2, 0xff, gb, gb);
+					} else {
+						for (y = first + 1; y < end - 1; y += 2) {
+							u16 row = y - (gx_efb_primitive_interior_even ? 1 : 0);
+
+							gx_emit_color_rect(0, row, 640, row + 2, 0xff, gb, gb);
+						}
+						if (gx_efb_primitive_interior_only)
+							gx_emit_color_rect(0, first, 0, first, 0xff, gb, gb);
+						else
+							gx_emit_color_rect(0, end - 1, 640, end, 0xff, gb, gb);
+					}
+				} else if (gx_efb_primitive_two_rows) {
+					if (!gx_efb_primitive_interleave) {
+						for (y = 0; y < 8; y++)
+							gx_emit_color_rect(0, first, 0, first,
+									   0xff, gb, gb);
+					}
+					for (y = first; y < end; y += 2) {
+						u16 row = y;
+						u8 row_gb;
+
+						if (gx_efb_primitive_alternate) {
+							u16 strip = (y - first) / 2;
+
+							row = first + (strip % 4) * 4 + (strip / 4) * 2;
+						}
+						if (gx_efb_primitive_interleave)
+							gx_emit_color_rect(0, first, 0, first,
+									   0xff, gb, gb);
+						row_gb = gx_efb_primitive_stripe_colors ?
+							(((row / 2 + iteration) & 1) ? 0xff : 0) : gb;
+						gx_emit_color_rect_alpha(0, row, 640,
+							row + (gx_efb_primitive_overlap_rows ? 4 : 2),
+							0xff, row_gb, row_gb,
+							gx_efb_primitive_alpha_mixed &&
+							((row / 2 + iteration / 2 + gx_efb_primitive_alpha_mixed_reverse) & 1) ? 0 : 0xff);
+					}
+				} else if (gx_efb_primitive_bands) {
+					u32 repeat;
+
+					for (repeat = 0; repeat < quads; repeat++) {
+						bool pad = gx_efb_primitive_pad_bands &&
+							   repeat < 15;
+
+						gx_emit_color_rect(0, first, pad ? 0 : 640,
+								   pad ? first : end, 0xff, gb, gb);
+					}
+				} else if (gx_efb_primitive_full_width) {
+					for (y = first; y < end; y++) {
+						u8 row_gb = gx_efb_primitive_stripe_colors ?
+							(((y + iteration) & 1) ? 0xff : 0) : gb;
+
+						gx_emit_color_rect(0, y, 640,
+							y + (gx_efb_primitive_overlap_rows ? 4 : 1),
+							0xff, row_gb, row_gb);
+					}
+				} else {
+					for (y = first; y < end; y++) {
+						gx_emit_color_rect(0, y, 320, y + 1, 0xff, gb, gb);
+						gx_emit_color_rect(320, y, 640, y + 1,
+								   0xff, gb, gb);
+					}
+				}
+primitive_emitted:
+				gx_load_bp_reg(0x45000002);
+				if (gx_efb_primitive_batch)
+					pr_info("gcn-gx: efb-primitive-batch iteration=%u batch=%u first=%u end=%u quads=%u bytes=%u hash=%08x\n",
+						iteration, batch, first, end, quads,
+						fifo_pos, gx_hash_pending_commands());
+				else
+					pr_info("gcn-gx: efb-primitive iteration=%u quads=%u bytes=%u hash=%08x\n",
+						iteration, quads, fifo_pos,
+						gx_hash_pending_commands());
+				ret = gx_submit_and_wait_finish("efb-primitive-draw");
+				if (ret)
+					break;
+				if (gx_efb_primitive_batch_snapshot) {
+					u32 bad = 0;
+					u16 sx, sy;
+
+					ret = gx_snapshot_scale_colors(snapshot, 640, 480);
+					if (ret)
+						break;
+					for (sy = 0; sy < 480; sy++) {
+						u32 want = sy < end ? expected : 0;
+
+						for (sx = 0; sx < 640; sx++) {
+							u32 raw = snapshot[(size_t)sy * 640 + sx];
+
+							if ((raw & 0xffffff) == want)
+								continue;
+							if (!bad)
+								pr_info("gcn-gx: efb-batch-first iteration=%u batch=%u first=%u end=%u x=%u y=%u expected=%08x raw=%08x\n",
+									iteration, batch, first, end, sx, sy, want, raw);
+							if (!seen_bad[(size_t)sy * 640 + sx]) {
+								seen_bad[(size_t)sy * 640 + sx] = 1;
+								if (newly_bad++ < 64)
+									pr_info("gcn-gx: efb-batch-new iteration=%u batch=%u first=%u end=%u x=%u y=%u expected=%08x raw=%08x region=%s\n",
+										iteration, batch, first, end, sx, sy, want, raw,
+										sy < first ? "past" : sy < end ? "current" : "future");
+							}
+							bad++;
+						}
+					}
+					batch_observed_bad += bad;
+					pr_info("gcn-gx: efb-batch-snapshot iteration=%u batch=%u end=%u pixels=307200 mismatches=%u\n",
+						iteration, batch, end, bad);
+				}
+				/* Keep GPU state; recycle the CPU FIFO only after completion. */
+				fifo_pos = 0;
+			}
+			if (ret)
+				break;
+primitive_snapshot:
+			ret = gx_snapshot_scale_colors(snapshot, 640, 480);
+			if (ret)
+				break;
+		}
+		fifo_pos = 0;
+		gx_setup_display_copy_state();
+		if (gx_efb_primitive_rgba6)
+			gx_load_bp_reg(copy_control);
+		gx_copy_efb_rect_to_rgb565_texture_stride_control(copy, 0, 0, 640, 480,
+							       640, false, copy_control);
+		ret = gx_submit_and_wait_finish("efb-clear-readback");
+		if (ret)
+			break;
+		invalidate_dcache_range((unsigned long)copy,
+					(unsigned long)copy + bytes);
+		for (y = 0; y < 480; y++) {
+			bool rejected = gx_efb_primitive_alpha_mixed &&
+				((y / 2 + iteration / 2 + gx_efb_primitive_alpha_mixed_reverse) & 1);
+			bool edge = gx_efb_primitive_interior_only &&
+				    (gx_efb_primitive_interior_even ? y % 16 >= 14 :
+				     (y % 16 == 0 || y % 16 == 15));
+			u32 row_expected = gx_efb_primitive_stripe_colors ?
+				(((y / (gx_efb_primitive_two_rows ? 2 : 1) + iteration) & 1) ?
+				 0xffffff : 0xff0000) :
+				(edge ? 0 : rejected ? 0xffffff : expected);
+
+			for (x = 0; x < 640; x++) {
+				u32 pixel_expected = gx_efb_primitive_focus &&
+					(x < 536 - focus_width ||
+					 x >= 536 || y < gx_efb_primitive_focus_top ||
+					 y >= gx_efb_primitive_focus_top + 4) ? 0 : row_expected;
+				u16 pixel_expected565 = gx_argb_to_rgb565(pixel_expected);
+				u32 raw = snapshot[(size_t)y * 640 + x];
+				u16 value = copy[gx_tiled_rgb565_index(x, y, 640)];
+
+				if (((raw & 0xffffff) != pixel_expected || value != pixel_expected565) &&
+				    !efb_bad && !copy_bad) {
+					struct gx_scale_efb_sample reads[3] = {
+						{ .x = x, .y = y },
+						{ .x = x, .y = y },
+						{ .x = x, .y = y },
+					};
+					int peek_ret;
+
+					peek_ret = gx_peek_scale_colors(reads, ARRAY_SIZE(reads));
+					pr_info("gcn-gx: efb-clear-first iteration=%u x=%u y=%u expected=%08x raw=%08x expected565=%04x copy=%04x peek_ret=%d peek0=%08x peek1=%08x peek2=%08x\n",
+						iteration, x, y, pixel_expected, raw, pixel_expected565,
+						value, peek_ret, reads[0].argb,
+						reads[1].argb, reads[2].argb);
+				}
+				efb_bad += (raw & 0xffffff) != pixel_expected;
+				copy_bad += value != pixel_expected565;
+				copy_diff += value != gx_argb_to_rgb565(raw);
+				if (rejected) {
+					rejected_raw += (raw & 0xffffff) != pixel_expected;
+					rejected_copy += value != pixel_expected565;
+				}
+			}
+		}
+		if (gx_efb_primitive_alpha_mixed)
+			pr_info("gcn-gx: efb-alpha-partition iteration=%u accepted_raw=%u rejected_raw=%u accepted_copy=%u rejected_copy=%u\n",
+				iteration, efb_bad - rejected_raw, rejected_raw,
+				copy_bad - rejected_copy, rejected_copy);
+		pr_info("gcn-gx: efb-clear iteration=%u expected=%08x pixels=307200 efb_mismatches=%u copy_mismatches=%u copy_differences=%u\n",
+			iteration, expected, efb_bad, copy_bad, copy_diff);
+		if (efb_bad || copy_bad || copy_diff || batch_observed_bad) {
+			ret = -EIO;
+			break;
+		}
+		WRITE_ONCE(gx_efb_clear_completed, iteration + 1);
+		cond_resched();
+	}
+	pr_info("gcn-gx: efb-clear-result ret=%d completed=%u requested=%u\n",
+		ret, iteration, gx_efb_clear_iterations);
+	mutex_unlock(&gx_submit_lock);
+	vfree(seen_bad);
+	vfree(snapshot);
+	return ret;
+}
+
 static int gcn_gx_probe(struct platform_device *pdev)
 {
 	int ret;
 
+	if (gx_efb_clear_iterations > 1000 ||
+	    (gx_efb_primitive_test && !gx_efb_clear_iterations) ||
+	    (gx_efb_primitive_single_quad && !gx_efb_primitive_test) ||
+	    (gx_efb_primitive_two_quads &&
+	     (!gx_efb_primitive_test || gx_efb_primitive_single_quad)) ||
+	    (gx_efb_primitive_batch &&
+	     (!gx_efb_primitive_test || gx_efb_primitive_single_quad ||
+	      gx_efb_primitive_two_quads)) ||
+	    (gx_efb_primitive_full_width && !gx_efb_primitive_batch) ||
+	    (gx_efb_primitive_bands && !gx_efb_primitive_full_width) ||
+	    (gx_efb_primitive_repeat_bands && !gx_efb_primitive_bands) ||
+	    (gx_efb_primitive_pad_bands && !gx_efb_primitive_repeat_bands) ||
+	    (gx_efb_primitive_two_rows && !gx_efb_primitive_pad_bands) ||
+	    (gx_efb_primitive_interleave && !gx_efb_primitive_two_rows) ||
+	    (gx_efb_primitive_alternate &&
+	     (!gx_efb_primitive_two_rows || gx_efb_primitive_interleave)) ||
+	    (gx_efb_primitive_stripe_colors &&
+	     ((!gx_efb_primitive_extended_viewport &&
+	       (!gx_efb_primitive_two_rows || gx_efb_primitive_odd_rows ||
+	        gx_efb_primitive_interleave || gx_efb_primitive_alternate ||
+	        gx_efb_primitive_focus)) || gx_efb_primitive_constant)) ||
+	    (gx_efb_primitive_extended_viewport &&
+	     (!gx_efb_primitive_full_width ||
+	      (gx_efb_primitive_bands && !gx_efb_primitive_two_rows) ||
+	      gx_efb_primitive_odd_rows ||
+	      gx_efb_primitive_interleave || gx_efb_primitive_alternate ||
+	      gx_efb_primitive_scissor_rows || gx_efb_primitive_batch_snapshot)) ||
+	    (gx_efb_primitive_overlap_rows && !gx_efb_primitive_extended_viewport) ||
+	    (gx_efb_primitive_batch_snapshot &&
+	     (!gx_efb_primitive_two_rows || gx_efb_primitive_odd_rows ||
+	      gx_efb_primitive_interleave || gx_efb_primitive_alternate)) ||
+	    (gx_scale_reduce_span &&
+	     ((gx_scale_reduce_span != 64 && gx_scale_reduce_span != 160) ||
+	      !gx_scale_trace || !gx_scale_efb_full || !gx_scale_split_reduce ||
+	      gx_scale_cpu_source || gx_scale_direct_color || gx_scale_clear_color)) ||
+	    (gx_scale_system_span &&
+	     ((gx_scale_system_span != 64 && gx_scale_system_span != 320) ||
+	      !gx_scale_system_trace || !gx_scale_system_split)) ||
+	    (gx_scale_offset_span &&
+	     ((gx_scale_offset_span != 64 && gx_scale_offset_span != 128) ||
+	      !gx_scale_offset_trace || !gx_scale_offset_split)) ||
+	    (gx_scale_bounded_final && (gx_scale_trace || gx_scale_system_span ||
+				       gx_scale_offset_trace || gx_scale_native_trace)) ||
+	    (gx_scale_bounded_horizontal && (!gx_scale_bounded_final || gx_scale_system_trace ||
+					   gx_scale_system_split || gx_scale_offset_split)) ||
+	    ((gx_scale_bounded_batch_quads != 400 && gx_scale_bounded_batch_quads != 600) ||
+	     (gx_scale_bounded_batch_quads != 600 && !gx_scale_bounded_final)) ||
+	    (gx_scale_native_stop_on_error && !gx_scale_native_trace) ||
+	    (gx_scale_native_test_mismatch &&
+	     (gx_scale_native_test_mismatch > 4 || !gx_scale_native_stop_on_error)) ||
+	    (gx_scale_native_reverse && !gx_scale_native_span) ||
+	    ((gx_scale_native_batch_rows != 80 && gx_scale_native_batch_rows != 120) ||
+	     (gx_scale_native_batch_rows != 80 && !gx_scale_native_span)) ||
+	    (gx_scale_native_span &&
+	     ((gx_scale_native_span != 64 && gx_scale_native_span != 160) ||
+	      !gx_scale_native_trace || !gx_scale_native_state_fence ||
+	      gx_scale_identity_quad || gx_scale_native_single_quad)) ||
+	    (gx_efb_primitive_full_split &&
+	     ((gx_efb_primitive_logic &&
+	       (!gx_efb_primitive_logic_set || !gx_efb_primitive_logic_black)) ||
+	      (gx_efb_primitive_white_background && !gx_efb_primitive_logic_black) ||
+	      gx_efb_primitive_no_draw || gx_efb_primitive_no_color_write ||
+	      gx_efb_primitive_z_never || gx_efb_primitive_alpha_mixed ||
+	      gx_efb_primitive_alpha_never ||
+	      (gx_efb_primitive_alpha_threshold && !gx_efb_primitive_alpha_threshold_pass) ||
+	      !gx_efb_primitive_two_rows || !gx_efb_primitive_batch ||
+	      gx_efb_primitive_focus || gx_efb_primitive_rgba6 ||
+	      gx_efb_primitive_interleave || gx_efb_primitive_alternate ||
+	      gx_efb_primitive_odd_rows || gx_efb_primitive_four_rows ||
+	      gx_efb_primitive_scissor_rows || gx_efb_primitive_extended_viewport ||
+	      gx_efb_primitive_cpu_write)) ||
+	    (gx_efb_primitive_focus_pad &&
+	     (!gx_efb_primitive_focus || !gx_efb_primitive_focus_wide ||
+	      gx_efb_primitive_focus_split || gx_efb_primitive_focus_viewport ||
+	      gx_efb_primitive_focus_top != 52)) ||
+	    (gx_efb_primitive_focus_right && !gx_efb_primitive_focus_split) ||
+	    ((gx_efb_primitive_focus_span != 64 &&
+	      gx_efb_primitive_focus_span != 96 &&
+	      gx_efb_primitive_focus_span != 128 &&
+	      gx_efb_primitive_focus_span != 256) ||
+	     (gx_efb_primitive_focus_span != 64 && !gx_efb_primitive_focus_split)) ||
+	    (gx_efb_primitive_focus_order > 2 ||
+	     (gx_efb_primitive_focus_order && !gx_efb_primitive_focus_split)) ||
+	    (gx_efb_primitive_focus_split &&
+	     (!gx_efb_primitive_focus ||
+	      (gx_efb_primitive_focus_width != 128 && !gx_efb_primitive_focus_wide))) ||
+	    (gx_efb_primitive_focus_viewport_shift &&
+	     (gx_efb_primitive_focus_viewport_shift != 32 || !gx_efb_primitive_focus_viewport)) ||
+	    (gx_efb_primitive_focus_viewport &&
+	     (!gx_efb_primitive_focus || !gx_efb_primitive_focus_wide ||
+	      gx_efb_primitive_focus_split || gx_efb_primitive_focus_top != 52 ||
+	      gx_efb_primitive_extended_viewport)) ||
+	    (gx_efb_primitive_focus_top > 476 ||
+	     (gx_efb_primitive_focus_top != 52 && !gx_efb_primitive_focus)) ||
+	    (gx_efb_primitive_focus_width < 8 || gx_efb_primitive_focus_width > 536) ||
+	    (gx_efb_primitive_focus_width != 8 &&
+	     (!gx_efb_primitive_focus || gx_efb_primitive_focus_wide)) ||
+	    (gx_efb_primitive_focus_wide && !gx_efb_primitive_focus) ||
+	    (gx_efb_primitive_focus &&
+	     (!gx_efb_primitive_logic_set || !gx_efb_primitive_logic_black ||
+	      gx_efb_primitive_rgba6 || gx_efb_primitive_interleave || gx_efb_primitive_alternate)) ||
+	    (gx_efb_primitive_rgba6 &&
+	     (!gx_efb_primitive_logic ||
+	      (!gx_efb_primitive_logic_clear && !gx_efb_primitive_logic_set))) ||
+	    (gx_efb_primitive_logic_clear &&
+	     (!gx_efb_primitive_logic || gx_efb_primitive_logic_invert || gx_efb_primitive_logic_set)) ||
+	    (gx_efb_primitive_logic_invert &&
+	     (!gx_efb_primitive_logic || gx_efb_primitive_logic_set)) ||
+	    (gx_efb_primitive_logic_black && !gx_efb_primitive_logic) ||
+	    (gx_efb_primitive_logic_set && !gx_efb_primitive_logic) ||
+	    (gx_efb_primitive_logic &&
+	     (!gx_efb_primitive_alpha_threshold_pass || gx_efb_primitive_alpha_mixed)) ||
+	    (gx_efb_primitive_alpha_mixed_reverse && !gx_efb_primitive_alpha_mixed) ||
+	    (gx_efb_primitive_alpha_mixed && !gx_efb_primitive_alpha_threshold_pass) ||
+	    (gx_efb_primitive_alpha_threshold_pass && !gx_efb_primitive_alpha_threshold) ||
+	    (gx_efb_primitive_alpha_threshold && gx_efb_primitive_alpha_never) ||
+	    ((gx_efb_primitive_alpha_never || gx_efb_primitive_alpha_threshold) &&
+	     (!gx_efb_primitive_white_background || !gx_efb_primitive_late_z ||
+	      gx_efb_primitive_z_never || gx_efb_primitive_no_draw ||
+	      gx_efb_primitive_no_color_write || gx_efb_primitive_z_test ||
+	      gx_efb_primitive_constant || gx_efb_primitive_scissor_rows)) ||
+	    ((gx_efb_primitive_z_never || gx_efb_primitive_no_draw) &&
+	     (!gx_efb_primitive_white_background || gx_efb_primitive_no_color_write ||
+	      gx_efb_primitive_z_test ||
+	      (gx_efb_primitive_no_draw && gx_efb_primitive_late_z) ||
+	      gx_efb_primitive_constant || gx_efb_primitive_scissor_rows ||
+	      (gx_efb_primitive_z_never && gx_efb_primitive_no_draw))) ||
+	    (gx_efb_primitive_no_color_write && !gx_efb_primitive_white_background) ||
+	    (gx_efb_primitive_white_background &&
+	     (!gx_efb_primitive_two_rows || gx_efb_primitive_odd_rows ||
+	      gx_efb_primitive_batch_snapshot || gx_efb_primitive_stripe_colors ||
+	      gx_efb_primitive_extended_viewport)) ||
+	    (gx_efb_primitive_cpu_write &&
+	     (!gx_efb_primitive_test || gx_efb_primitive_batch ||
+	      gx_efb_primitive_single_quad || gx_efb_primitive_two_quads ||
+	      gx_efb_primitive_constant || gx_efb_primitive_z_test ||
+	      gx_efb_primitive_late_z)) ||
+	    (gx_efb_primitive_scissor_rows &&
+	     (!gx_efb_primitive_two_rows || gx_efb_primitive_odd_rows ||
+	      gx_efb_primitive_interleave || gx_efb_primitive_alternate)) ||
+	    (gx_efb_primitive_tall_rows && !gx_efb_primitive_scissor_rows) ||
+	    (gx_efb_primitive_constant && !gx_efb_primitive_test) ||
+	    (gx_efb_primitive_z_test && !gx_efb_primitive_test) ||
+	    (gx_efb_primitive_z_write && !gx_efb_primitive_z_test) ||
+	    (gx_efb_primitive_late_z && !gx_efb_primitive_test) ||
+	    (gx_efb_primitive_interior_even && !gx_efb_primitive_interior_only) ||
+	    (gx_efb_primitive_interior_only &&
+	     (!gx_efb_primitive_odd_rows || gx_efb_primitive_edge_pair)) ||
+	    (gx_efb_primitive_edge_pair && !gx_efb_primitive_odd_rows) ||
+	    (gx_efb_primitive_odd_rows &&
+	     (!gx_efb_primitive_two_rows || gx_efb_primitive_interleave ||
+	      gx_efb_primitive_alternate)) ||
+	    (gx_efb_primitive_four_rows &&
+	     (!gx_efb_primitive_pad_bands || gx_efb_primitive_two_rows)))
+		return -EINVAL;
 	ret = gcn_gx_init(pdev);
 	if (ret)
 		return ret;
+	if (gx_efb_clear_iterations) {
+		ret = gx_test_efb_clear();
+		gx_efb_clear_result = ret;
+		if (ret) {
+			gcn_gx_exit();
+			return ret;
+		}
+	}
 
 #if IS_ENABLED(CONFIG_DRM_GCN_GX)
 	ret = gcn_drm_register_accel_v12(&gcn_gx_drm_accel_ops);

@@ -1,0 +1,3 @@
+Opening persistent SSH connection to root@10.3.10.59
+gcn-kms-flip-test: offscreen frame=0 render-us=86247
+gcn-kms-flip-test: PASS offscreen format=xrgb8888-native-tiled frames=16 pixels=4915200

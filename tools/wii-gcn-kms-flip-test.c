@@ -29,6 +29,10 @@
 #define FLIP_TIMEOUT_MS 2000
 #define TEST_DRM_MODE_CONNECTED 1
 
+static bool swap_red_white;
+static bool rotate_rgb;
+static bool content_cycle;
+
 struct render_buffer {
 	struct drm_gcn_gem_create bo;
 	struct drm_mode_fb_cmd fb;
@@ -70,6 +74,35 @@ static uint64_t monotonic_ns(void)
 	return (uint64_t)now.tv_sec * 1000000000ULL + now.tv_nsec;
 }
 
+static uint32_t content_xrgb8888(unsigned int x, unsigned int y, unsigned int frame)
+{
+	static const uint16_t solid[] = { 0, 0xffff, 0xf800, 0x07e0, 0x001f };
+	unsigned int pattern = frame % 8;
+	uint32_t value;
+	uint16_t pixel;
+	uint32_t r, g, b;
+
+	if (pattern < 5)
+		pixel = solid[pattern];
+	else if (pattern == 5)
+		pixel = ((x + y + frame / 8) & 1) ? 0xffff : 0;
+	else if (pattern == 6)
+		pixel = 1U << ((x + y + frame / 8) & 15);
+	else {
+		value = (y * DST_WIDTH + x) ^ ((frame + 1U) * 0x9e3779b9U);
+		value ^= value >> 16;
+		value *= 0x7feb352dU;
+		value ^= value >> 15;
+		value *= 0x846ca68bU;
+		pixel = (uint16_t)(value ^ (value >> 16));
+	}
+	r = (pixel >> 11) & 31;
+	g = (pixel >> 5) & 63;
+	b = pixel & 31;
+	return (((r << 3) | (r >> 2)) << 16) |
+	       (((g << 2) | (g >> 4)) << 8) | (b << 3) | (b >> 2);
+}
+
 static uint32_t pattern_xrgb8888(unsigned int x, unsigned int y,
 				 unsigned int frame, unsigned int width,
 				 unsigned int height)
@@ -86,7 +119,14 @@ static uint32_t pattern_xrgb8888(unsigned int x, unsigned int y,
 	unsigned int marker_margin = height / 15;
 	unsigned int marker = frame * marker_step % (width - marker_width);
 	unsigned int quadrant = (y >= height / 2) * 2 + (x >= width / 2);
-	uint32_t pixel = colors[quadrant];
+	unsigned int color_index = quadrant;
+	uint32_t pixel;
+
+	if (content_cycle)
+		return content_xrgb8888(x, y, frame);
+	if (swap_red_white && (color_index == 0 || color_index == 3))
+		color_index = 3 - color_index;
+	pixel = colors[color_index];
 
 	if (x < border_x || x >= width - border_x || y < border_y ||
 	    y >= height - border_y)
@@ -101,6 +141,9 @@ static uint32_t pattern_xrgb8888(unsigned int x, unsigned int y,
 	    y < height - marker_margin)
 		pixel = 0x0000ffff;
 
+	/* Rotate the complete pattern: red -> green -> blue -> red. */
+	if (rotate_rgb)
+		pixel = ((pixel & 0xff) << 16) | ((pixel >> 8) & 0xffff);
 	return pixel;
 }
 
@@ -441,6 +484,11 @@ static int run_offscreen(int fd, __u32 ctx_id,
 	for (frame = 0; frame <= count; frame++) {
 		uint64_t render_ns;
 
+		if (content_cycle) {
+			printf("gcn-kms-flip-test: native-content frame=%u pattern=%u seed=%08x\n",
+			       frame, frame % 8, (frame + 1U) * 0x9e3779b9U);
+			fflush(stdout);
+		}
 		if (render_frame(fd, ctx_id, src, src_map, &buffers[frame & 1],
 				 frame, native, native_tiled, &render_ns) < 0) {
 			perror("render offscreen buffer");
@@ -494,11 +542,25 @@ int main(int argc, char **argv)
 	int fd = -1;
 	int ret = EXIT_FAILURE;
 
-	if (argc > 5 || (argc > 4 && !offscreen)) {
+	if (argc > 6 || (argc > 4 && !offscreen) ||
+	    (argc > 5 && strcmp(argv[5], "--swap-red-white") &&
+	     strcmp(argv[5], "--rotate-rgb") && strcmp(argv[5], "--content-cycle"))) {
 		fprintf(stderr,
-			"usage: %s [card [count [format [--offscreen]]]]\n",
+			"usage: %s [card [count [format [--offscreen [--swap-red-white|--rotate-rgb|--content-cycle]]]]]\n",
 			argv[0]);
 		return EXIT_FAILURE;
+	}
+	content_cycle = argc > 5 && !strcmp(argv[5], "--content-cycle");
+	if (content_cycle && (!offscreen || !native_tiled)) {
+		fprintf(stderr, "content cycle requires offscreen xrgb8888-native-tiled\n");
+		return EXIT_FAILURE;
+	}
+	swap_red_white = argc > 5 && !strcmp(argv[5], "--swap-red-white");
+	rotate_rgb = argc > 5 && !strcmp(argv[5], "--rotate-rgb");
+	if (swap_red_white || rotate_rgb) {
+		printf("gcn-kms-flip-test: diagnostic palette=%s\n",
+		       swap_red_white ? "swap-red-white" : "rotate-rgb");
+		fflush(stdout);
 	}
 	fd = open(card, O_RDWR | O_CLOEXEC);
 	if (fd < 0) {
