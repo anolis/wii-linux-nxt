@@ -9,10 +9,13 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 
 #include <drm/gcn_drm.h>
+
+static bool system_profile;
 
 #define TEST_WIDTH 256U
 #define TEST_HEIGHT 256U
@@ -3913,7 +3916,9 @@ static void test_full_system_layout(int fd, uint32_t layout,
 	uint64_t free_before = 0;
 	uint64_t free_during = 0;
 	uint64_t free_after = 0;
-	uint64_t started, elapsed;
+	uint64_t started, elapsed, cpu_elapsed = 0;
+	struct timespec cpu_start, cpu_end, cpu_resolution;
+	struct rusage usage_start, usage_end;
 	int submit_status, submit_errno;
 
 	if (get_param(fd, DRM_GCN_PARAM_MEM1_FREE_BYTES, &free_before)) {
@@ -3978,12 +3983,33 @@ static void test_full_system_layout(int fd, uint32_t layout,
 		.dst_height = FULL_DST_HEIGHT,
 	};
 	started = monotonic_ns();
+	if (system_profile && (clock_getres(CLOCK_THREAD_CPUTIME_ID, &cpu_resolution) ||
+	    getrusage(RUSAGE_SELF, &usage_start) ||
+	    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start))) {
+		fail("read system CPU profile start");
+		goto out_ctx;
+	}
 	submit_status = ioctl(fd, DRM_IOCTL_GCN_BLIT_SCALED, &blit);
 	submit_errno = errno;
+	if (system_profile) {
+		if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end) ||
+		    getrusage(RUSAGE_SELF, &usage_end)) {
+			fail("read system CPU profile end");
+			goto out_ctx;
+		}
+		cpu_elapsed = ((uint64_t)cpu_end.tv_sec * 1000000000ULL + cpu_end.tv_nsec) -
+			      ((uint64_t)cpu_start.tv_sec * 1000000000ULL + cpu_start.tv_nsec);
+	}
 	elapsed = monotonic_ns() - started;
 	if (timed)
 		printf("SYSTEM TIMING: iteration=%u ns=%llu status=%d\n", iteration,
 		       (unsigned long long)elapsed, submit_status);
+	if (system_profile)
+		printf("SYSTEM CPU: iteration=%u ns=%llu voluntary=%ld involuntary=%ld resolution_ns=%llu\n",
+		       iteration, (unsigned long long)cpu_elapsed,
+		       usage_end.ru_nvcsw - usage_start.ru_nvcsw,
+		       usage_end.ru_nivcsw - usage_start.ru_nivcsw,
+		       (unsigned long long)cpu_resolution.tv_sec * 1000000000ULL + cpu_resolution.tv_nsec);
 	if (submit_status) {
 		errno = submit_errno;
 		fail("submit 320x240 to 640x480 system scaled blit");
@@ -4297,7 +4323,8 @@ int main(int argc, char **argv)
 			    !strcmp(argv[1], "--wide-reduce-uniform-only");
 	bool reduce_content = argc > 2 && !strcmp(argv[1], "--reduce-content-repeat");
 	bool reduce_repeat = reduce_content || (argc > 2 && !strcmp(argv[1], "--reduce-repeat"));
-	bool system_content = argc > 2 && !strcmp(argv[1], "--system-content-repeat");
+	bool profile_repeat = argc > 2 && !strcmp(argv[1], "--system-profile-repeat");
+	bool system_content = profile_repeat || (argc > 2 && !strcmp(argv[1], "--system-content-repeat"));
 	bool system_repeat = system_content || (argc > 2 && !strcmp(argv[1], "--system-enlarge-repeat"));
 	bool offset_repeat = argc > 2 && !strcmp(argv[1], "--offset-enlarge-repeat");
 	unsigned int repeat_iterations = 1;
@@ -4319,6 +4346,7 @@ int main(int argc, char **argv)
 	int other_fd;
 	int fd;
 
+	system_profile = profile_repeat;
 	if (offset_repeat || system_repeat || reduce_repeat) {
 		char *end;
 		unsigned long count = strtoul(argv[2], &end, 10);

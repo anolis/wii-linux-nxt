@@ -22394,3 +22394,26 @@ New render client SHA256
 Strict build, 77 audit tests, manifests and cleanup checks pass. Installed
 provider, driver source and defaults unchanged. Full details are in the
 fault-investigation report.
+
+
+### 2026-09-14: CPU profile points to preemption in scaling timing tails
+
+The new system profile records per-call thread CPU time and context-switch
+counts alongside elapsed time, using the unchanged bounded module and source
+content cycle. Another 1000 iterations / 307200000 destination checks passed,
+followed by the default regression. Elapsed median/p95/max were
+26.730288/36.395555/85.282189 ms; CPU median/p95/max were
+22.380832/22.570112/29.618304 ms. The slowest call had 55.663885 ms off-CPU
+residual, zero voluntary switches and 13 involuntary switches.
+
+This supports preemption as a major tail contributor, without identifying
+the competing task or explaining the earlier unprofiled 127 ms call. CPU
+time includes the driver's GPU-token busy-polling, so it is not purely useful
+CPU work. Next: bounded scheduler capture while keeping rendering unchanged.
+
+Evidence: `wii-gcn-matrix-system-profile-20260914-screen` and `-long` under
+`/media/anolis/dev`. New client SHA256
+`f43e48e23ed6b87bed1dc451c4cb480e5bc2d57a067c00197e99d19f330189de`.
+Strict build, 78 audit tests, manifests and cleanup checks pass. Installed
+driver, driver source and defaults unchanged. See the investigation report
+for complete timing/counter scope.

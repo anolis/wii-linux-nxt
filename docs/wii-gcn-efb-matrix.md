@@ -728,3 +728,18 @@ uses both helpers with the original ramp source. They require the new timing
 client and exact per-attempt timing records. A short order-reversed comparison
 can assess cost without an unnecessary long run of a known unreliable control.
 Never use timings from censored failures to claim a stable speed/reliability tradeoff.
+
+`bounded-both-system-profile` selects `--system-profile-repeat N`, retaining
+the eight-pattern enlargement sequence while recording thread CPU time
+(`CLOCK_THREAD_CPUTIME_ID`) and process voluntary/involuntary context-switch
+deltas (`getrusage`; the client is single-threaded). The elapsed interval
+encloses the profile reads as well as the ioctl. The audit requires every
+CPU record and a consistent reported clock resolution, and keeps clean-call
+CPU samples, switch counts and signed elapsed-minus-CPU differences.
+
+Elapsed-minus-CPU is an approximation of off-CPU time plus measurement
+overhead, not a GPU wait timer. Accounting granularity may also affect it;
+negative differences are preserved rather than clamped or called waits.
+Context switches can indicate blocking/preemption but do not identify the
+specific wait or competing task. This profile changes measurement overhead
+and does not add kernel instrumentation or alter rendering commands.

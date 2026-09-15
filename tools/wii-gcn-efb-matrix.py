@@ -216,6 +216,10 @@ for name, baseline, content in [('system-baseline-timed', True, False),
                       bounded_horizontal=not baseline, system_baseline=baseline,
                       system_content=content, system_timed=True, experimental=True))
 
+CASES.append(dict(case('bounded-both-system-profile', [], '', 0, 0), bounded=True,
+                  bounded_workload='system', bounded_horizontal=True, system_content=True,
+                  system_timed=True, system_profile=True, experimental=True))
+
 for span in (64, 128):
     CASES.append(dict(case(f'offset-span-{span}', [], '', 0, 0), offset=True, span=span, experimental=True))
 
@@ -336,6 +340,18 @@ def audit_bounded_workload(log, client_log, spec, requested, rc):
                       ioctl_median_ns=(ordered[(len(ordered)-1)//2]+ordered[len(ordered)//2])//2 if samples else None,
                       ioctl_p95_ns=ordered[(95*len(ordered)+99)//100-1] if samples else None,
                       ioctl_max_ns=max(samples) if samples else None)
+    cpu = re.findall(r'SYSTEM CPU: iteration=(\d+) ns=(\d+) voluntary=(\d+) involuntary=(\d+) resolution_ns=(\d+)', client_log)
+    if spec.get('system_profile'):
+        require(len(cpu) == checked and all(r[0] == str(i) and int(r[4]) > 0 for i,r in enumerate(cpu)),
+                'incomplete/wrong system CPU records')
+        require(len({r[4] for r in cpu}) == 1, 'changing CPU clock resolution')
+        result.update(cpu_samples_ns=[int(r[1]) for r in cpu[:completed]],
+                      voluntary_switches=[int(r[2]) for r in cpu[:completed]],
+                      involuntary_switches=[int(r[3]) for r in cpu[:completed]],
+                      cpu_clock_resolution_ns=int(cpu[0][4]),
+                      elapsed_minus_cpu_ns=[int(t[1])-int(c[1]) for t,c in zip(timings[:completed],cpu[:completed])])
+    else:
+        require(not cpu, 'unexpected system CPU profile')
     if rc:
         result['first_record'] = next((line for line in client_log.splitlines() if line.startswith('FAIL:')), '')
         pixel = re.search(r'mismatch at \((\d+),(\d+)\)', result['first_record'])
@@ -990,6 +1006,8 @@ def main():
                     command[-1] = ''
                 if spec.get('system_content'):
                     command[command.index('--client-args') + 1] = f'--system-content-repeat {args.iterations}'
+                if spec.get('system_profile'):
+                    command[command.index('--client-args') + 1] = f'--system-profile-repeat {args.iterations}'
                 if spec.get('bounded_horizontal'):
                     command[-1] += ' scale_bounded_horizontal=1'
                 if spec.get('native') or spec.get('regression') or spec.get('bounded'):

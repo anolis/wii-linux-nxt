@@ -1952,3 +1952,71 @@ manifests verify. Cleanup confirms unchanged boot UUID, printk `7 4 1 7`,
 module unloaded, matrix lock released, and installed-provider SHA256
 `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
 Driver source, module binary and production defaults are unchanged this step.
+
+
+## 2026-09-14: CPU versus elapsed system-scaling profile
+
+Added `--system-profile-repeat N` and `bounded-both-system-profile`. They
+retain the eight-pattern 320x240 enlargement and both general helpers, while
+recording `CLOCK_THREAD_CPUTIME_ID`, its reported resolution, and `getrusage`
+voluntary/involuntary context-switch deltas per attempt. The client is single
+threaded. The monotonic interval encloses the profile reads and scaling
+ioctl; allocation, source generation and pixel checks remain outside it.
+The audit preserves signed elapsed-minus-CPU differences and excludes failed
+last attempts from clean sample arrays. It requires all CPU records, ordered
+iterations and a consistent positive clock resolution.
+
+The CPU clock is not a measure of useful rendering work alone. Inspection
+of `gx_submit_cmds` shows token polling with `udelay(10)`; such GPU waiting
+is counted as CPU time. `gx_wait_for_pe_finishes` can also use a wait queue.
+Off-CPU residual can include blocking, preemption and instrumentation;
+context-switch counts alone identify neither a particular competing task
+nor a GPU wait. Preserve this distinction when interpreting the profile.
+
+`wii-gcn-matrix-system-profile-20260914-screen` passed 16 content iterations.
+Medians: elapsed 23.818346 ms, CPU 22.237248 ms, signed residual 1.620906 ms.
+The screen recorded zero voluntary and 63 involuntary switches, and the CPU
+clock reported 1 ns resolution (not a guarantee of accounting accuracy).
+
+Client archive `/media/anolis/dev/wii-gcn-system-profile-clients/wii-gcn-render-test`,
+SHA256 `f43e48e23ed6b87bed1dc451c4cb480e5bc2d57a067c00197e99d19f330189de`.
+Strict client build passes; module and driver source remain unchanged.
+Real screen fixtures cover CPU records and counters. An explicitly synthetic
+CPU sample tests that negative residuals are preserved instead of silently
+clamped to an asserted wait duration.
+
+
+### Long profile: tail predominantly off-CPU
+
+`wii-gcn-matrix-system-profile-20260914-long` passed 1000 content iterations
+(307200000 destination pixel checks) and the default regression. All CPU
+records report 1 ns clock resolution; no signed residual was negative.
+
+| Clean-call metric | Median ms | p95 ms | Maximum ms |
+|---|---:|---:|---:|
+| Elapsed | 26.730288 | 36.395555 | 85.282189 |
+| Thread CPU | 22.380832 | 22.570112 | 29.618304 |
+| Elapsed minus CPU | 4.374810 | 14.010170 | 55.663885 |
+
+The largest elapsed call was zero-based iteration 972 (blue): 85.282189 ms
+elapsed, 29.618304 ms CPU, 55.663885 ms residual, zero voluntary and 13
+involuntary switches. Iteration 48 (black) was 54.355 ms elapsed, 22.643 ms
+CPU, 31.712 ms residual, zero voluntary and seven involuntary switches.
+The next six slowest calls also recorded zero voluntary switches, with
+five to eight involuntary switches and CPU times around 22.2--22.7 ms.
+Across the run there were 13 voluntary and 5014 involuntary switches.
+
+These observations support scheduling/preemption as a major contributor to
+the observed elapsed-time tail. They do not identify the competing tasks or
+exclude interrupt/accounting effects. They also do not explain the earlier
+127 ms call directly, since that capture lacked CPU counters. The tight CPU
+p95 argues against changing rendering geometry merely to attack these tails.
+Next, use a bounded scheduler capture to identify what runs while the client
+is off-CPU, accounting for diagnostic/capture overhead. Retain the validated
+rendering commands and full pixel checks for that comparison.
+
+Strict client build, all 78 audit tests and diff checks pass. Both new suite
+manifests verify. Final cleanup confirms unchanged boot UUID/printk, module
+unloaded, matrix lock released and installed-provider SHA256
+`a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+No driver source, module binary, or production-default change was made.

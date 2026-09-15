@@ -869,6 +869,27 @@ class AuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-timed'], 16, 0)
 
+    def test_system_profile_requires_cpu_records_and_preserves_signed_residual(self):
+        name = 'bounded-both-system-profile'
+        log = gzip.decompress((FIXTURES / f'{name}.txt.gz').read_bytes()).decode()
+        client = gzip.decompress((FIXTURES / f'{name}-client.txt.gz').read_bytes()).decode()
+        result = matrix.audit_bounded_workload(log, client, CASES[name], 16, 0)
+        self.assertEqual((len(result['cpu_samples_ns']), result['cpu_clock_resolution_ns']), (16,1))
+        self.assertEqual(sum(result['voluntary_switches']), 0)
+        for wall, cpu, residual in zip(result['ioctl_samples_ns'], result['cpu_samples_ns'], result['elapsed_minus_cpu_ns']):
+            self.assertEqual(residual, wall-cpu)
+        for broken in (client.replace('SYSTEM CPU: iteration=15', 'missing'),
+                       client.replace('SYSTEM CPU: iteration=0', 'SYSTEM CPU: iteration=1'),
+                       client.replace('resolution_ns=1', 'resolution_ns=0', 1)):
+            with self.assertRaises(ValueError):
+                matrix.audit_bounded_workload(log, broken, CASES[name], 16, 0)
+        import re
+        synthetic = re.sub(r'(SYSTEM CPU: iteration=0 ns=)\d+', r'\g<1>999999999', client)
+        result = matrix.audit_bounded_workload(log, synthetic, CASES[name], 16, 0)
+        self.assertLess(result['elapsed_minus_cpu_ns'][0], 0)
+        with self.assertRaises(ValueError):
+            matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-content'], 16, 0)
+
     def test_truncated_capture_rejected(self):
         with self.assertRaises(ValueError):
             matrix.audit(self.good.split('efb-clear-result')[0], CASES['interior'], 4, 0)
