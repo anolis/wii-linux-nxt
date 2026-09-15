@@ -876,3 +876,22 @@ the detailed batch evidence from logged qualification. Unexpected bounded
 records or missing parameter verification are audit errors. Compare the profile
 case with `bounded-both-system-profile-cached` using the same module and client,
 then reverse the order. The dmesg collector remains active in both cases.
+
+### Real KMS presentation
+
+`display-quiet-rgb565`, `display-quiet-xrgb8888`, and
+`display-quiet-xrgb8888-native-tiled` run the page-flip client on `/dev/dri/card0`
+with cached bounded rendering and routine helper logs disabled. Supply
+`--render-client PATH/TO/wii-gcn-kms-flip-test`; `--iterations N` means N rendered
+frames, including the initial modeset frame (N-1 flips), with N >= 3. RGB565 and
+XRGB8888 enlarge 320x240 to 640x480; native tiled mode renders four 1:1 quadrants.
+
+Every frame is pixel-verified before presentation. The client requires matching
+flip user-data and advancing events, aggregates event timestamp intervals and
+vblank-sequence gaps, restores the saved CRTC, checks GEM/context cleanup, and
+requires MEM1 free bytes to recover. Gap histogram bins are 1 through 8 and
+9-or-more vblanks. There are N-2 measured intervals between N-1 flip events.
+Cadence includes source generation and a full CPU pixel oracle per frame; it is
+not a normal-application FPS benchmark. These captures prove buffer contents and
+KMS event delivery; physical appearance is separate evidence from the VLC feed
+or a human observer. No kernel batch evidence is claimed for quiet presentation.

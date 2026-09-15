@@ -191,6 +191,10 @@ for name, traced in [('native-identity', True), ('native-identity-production', F
 CASES.append(dict(case('native-default-production', [], '', 0, 0), native=True, identity=True,
                   traced=False, single=True, use_default=True, experimental=True))
 
+for format_name in ('rgb565', 'xrgb8888', 'xrgb8888-native-tiled'):
+    CASES.append(dict(case(f'display-quiet-{format_name}', [], '', 0, 0),
+                      presentation=True, display_format=format_name, experimental=True))
+
 CASES.append(dict(case('render-regression', [], '', 0, 0), regression=True, experimental=True))
 CASES.append(dict(case('bounded-final-regression', [], '', 0, 0), regression=True, bounded=True, experimental=True))
 for workload in ('offset', 'system', 'reduce-content'):
@@ -268,6 +272,41 @@ for span in (64, 320):
 for span in (64, 160):
     CASES.append(dict(case(f'reduce-span-{span}', [], '', 0, 0), reduce=True, span=span, experimental=True))
     CASES.append(dict(case(f'reduce-content-{span}', [], '', 0, 0), reduce=True, span=span, content=True, experimental=True))
+
+def audit_presentation(log, client, spec, requested, rc):
+    require('CPU console restored' in log and 'gcn-gx: ready fifo=' in log,
+            'display provider/cleanup evidence missing')
+    require(not re.search(r'\btimeout\b|\bstall\b|\bOops:|\bBUG:|Call Trace:',log,re.I), 'display kernel fault')
+    for name,value in (('scale_bounded_final','Y'),('scale_bounded_horizontal','Y'),
+                       ('scale_bounded_coord_cache','Y'),('scale_bounded_log','N')):
+        require(log.count(f'parameter {name} verified {value}') == 1, 'display parameter not verified')
+    require(len(re.findall(r'gcn-kms-flip-test: MEM1 recovered bytes=\d+',client)) == 1,
+            'display MEM1 recovery missing')
+    failure = re.search(r'frame (\d+) mismatch at \((\d+),(\d+)\): got=([0-9a-f]+) expected=([0-9a-f]+)',client)
+    if rc:
+        require(rc == 1 and failure, 'display infrastructure/client failure')
+        completed = int(failure[1])
+        require(completed < requested and (not completed or
+                client.count('restored previous console framebuffer') == 1), 'failed display cleanup/count mismatch')
+        return dict(case=spec['name'],status='FAIL',requested=requested,completed=completed,
+                    checked=completed+1,first_pixel=f'{failure[2]},{failure[3]}',first_record=failure[0],
+                    raw_errors=None,copy_errors=None)
+    require(not failure, 'display success despite pixel mismatch')
+    require(client.count('restored previous console framebuffer') == 1, 'CRTC restoration missing')
+    rows = re.findall(r'gcn-kms-flip-test: PASS format=(\S+) frames=(\d+) last-vblank=(\d+) pixels=(\d+) render-us-avg=(\d+) render-us-max=(\d+)',client)
+    require(len(rows)==1 and rows[0][0]==spec['display_format'] and int(rows[0][1])==requested
+            and int(rows[0][3])==requested*307200 and 0<int(rows[0][4])<=int(rows[0][5]), 'wrong display completion')
+    pace = re.findall(r'pacing intervals=(\d+) total-ns=(\d+) min-ns=(\d+) max-ns=(\d+) gaps=([0-9,]+)',client)
+    require(len(pace)==1, 'missing presentation pacing')
+    n,total,minimum,maximum=map(int,pace[0][:4]);gaps=list(map(int,pace[0][4].split(',')))
+    require(n==requested-2 and n>0 and len(gaps)==9 and sum(gaps)==n
+            and 0<minimum<=maximum and n*minimum<=total<=n*maximum,'invalid presentation pacing')
+    return dict(case=spec['name'],status='PASS',requested=requested,completed=requested,checked=requested,
+                client_pixels_checked=requested*307200,raw_errors=None,copy_errors=None,
+                evidence_mode='verified-buffers-and-KMS-events',physical_screen_verified=False,
+                render_us_avg=int(rows[0][4]),render_us_max=int(rows[0][5]),
+                presentation_intervals=n,presentation_total_ns=total,presentation_min_ns=minimum,
+                presentation_max_ns=maximum,vblank_gap_histogram=gaps)
 
 def audit_regression(log, client_log, requested, rc):
     require('CPU console restored' in log, 'regression cleanup missing')
@@ -901,6 +940,9 @@ def run_client(command, log_path, label, requested, timeout, native=False):
                     source.seek(max(0, log_path.stat().st_size - 2048))
                     data = source.read()
                     matches = re.findall(rb'offscreen frame=(\d+)' if native else rb'(\d+)/\d+ iterations', data)
+                    display_frames = re.findall(rb'gcn-kms-flip-test: frame=(\d+)',data)
+                    if display_frames:
+                        done = min(requested, int(display_frames[-1])+1)
                 observed = int(matches[-1]) + int(native) if matches else 0
                 if native:
                     # A content marker precedes its frame: only earlier frames are complete.
@@ -956,6 +998,8 @@ def main():
             'whole-loop scheduler capture is limited to 64 iterations')
     require(args.iterations <= 8 or not any(c.get('deferred') for c in selected),
             'deferred capture is limited to eight iterations for the 16 KiB kernel log')
+    require(args.iterations >= 3 or not any(c.get('presentation') for c in selected),
+            'display pacing needs at least three frames')
     total = sum(1 if c.get('regression') else args.iterations for c in selected)
     print(f'{len(selected)} cases, up to {total} total iterations/suite runs; frame/geometry ceiling {args.iterations}.')
     if args.dry_run:
@@ -971,7 +1015,7 @@ def main():
     module.write_bytes(args.module.read_bytes())
     if any(c.get('native') for c in selected):
         (directory / 'native-client').write_bytes(args.native_client.read_bytes())
-    if any(c.get('bounded') or c.get('regression') or c.get('offset') or c.get('system') or c.get('reduce') for c in selected):
+    if any(c.get('presentation') or c.get('bounded') or c.get('regression') or c.get('offset') or c.get('system') or c.get('reduce') for c in selected):
         (directory / 'render-client').write_bytes(args.render_client.read_bytes())
     snapshots = directory / 'sources'
     snapshots.mkdir()
@@ -1071,6 +1115,14 @@ def main():
                         command[-1] += ' scale_system_trace=1'
                     if spec.get('bounded_horizontal_split'):
                         command[-1] += ' scale_system_split=1'
+                if spec.get('presentation'):
+                    command = ['tools/wii-gcn-render-cycle.sh', '--host', args.host, '--module', str(module),
+                               '--client', str(directory / 'render-client'), '--quiet-kernel',
+                               '--client-args', f'/dev/dri/card0 {args.iterations-1} {spec["display_format"]}',
+                               '--module-args', 'scale_bounded_final=1 scale_bounded_horizontal=1 scale_bounded_coord_cache=1 scale_bounded_log=0']
+                    for name,value in (('scale_bounded_final','Y'),('scale_bounded_horizontal','Y'),
+                                       ('scale_bounded_coord_cache','Y'),('scale_bounded_log','N')):
+                        command += ['--expect-param', f'{name}={value}']
                 if spec.get('mixed_offset'):
                     command[command.index('--client-args') + 1] = f'--offset-mixed-repeat {args.iterations}'
                 if spec.get('system_baseline'):
@@ -1129,7 +1181,8 @@ def main():
                 after = remote.state()
                 (case_dir / 'after.json').write_text(json.dumps(after, indent=2) + '\n')
                 require(after['module'] == 'unloaded' and after['boot'] == baseline['boot'] and after['printk'] == baseline['printk'], 'console/module/boot cleanup verification failed')
-                result.update(audit_reduce(raw.decode(), (case_dir / 'client.txt').read_text(), spec, args.iterations, rc)
+                result.update(audit_presentation(raw.decode(), (case_dir / 'client.txt').read_text(), spec, args.iterations, rc)
+                              if spec.get('presentation') else audit_reduce(raw.decode(), (case_dir / 'client.txt').read_text(), spec, args.iterations, rc)
                               if spec.get('reduce') else audit_system(raw.decode(), (case_dir / 'client.txt').read_text(), spec, args.iterations, rc)
                               if spec.get('system') else audit_offset(raw.decode(), (case_dir / 'client.txt').read_text(), spec, args.iterations, rc)
                               if spec.get('offset') else audit_bounded_workload(raw.decode(), (case_dir / 'client.txt').read_text(), spec, args.iterations, rc)

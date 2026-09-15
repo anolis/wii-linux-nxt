@@ -187,14 +187,17 @@ static int create_linear_bo(int fd, struct drm_gcn_gem_create *bo,
 	return *map == MAP_FAILED ? -1 : 0;
 }
 
-static void close_bo(int fd, struct drm_gcn_gem_create *bo, void *map)
+static int close_bo(int fd, struct drm_gcn_gem_create *bo, void *map)
 {
 	struct drm_gem_close close_args = { .handle = bo->handle };
 
-	if (map != MAP_FAILED)
-		munmap(map, bo->size);
-	if (bo->handle)
-		xioctl(fd, DRM_IOCTL_GEM_CLOSE, &close_args);
+	int ret = 0;
+
+	if (map != MAP_FAILED && munmap(map, bo->size))
+		ret = -1;
+	if (bo->handle && xioctl(fd, DRM_IOCTL_GEM_CLOSE, &close_args))
+		ret = -1;
+	return ret;
 }
 
 static int get_resources(int fd, struct drm_mode_card_res *res,
@@ -380,7 +383,7 @@ static int render_frame(int fd, __u32 ctx_id,
 	return 0;
 }
 
-static int wait_flip_event(int fd, __u64 expected, __u32 *sequence)
+static int wait_flip_event(int fd, __u64 expected, __u32 *sequence, uint64_t *event_ns)
 {
 	unsigned char data[256];
 	struct pollfd poll_fd = { .fd = fd, .events = POLLIN };
@@ -420,6 +423,8 @@ static int wait_flip_event(int fd, __u64 expected, __u32 *sequence)
 				return -1;
 			}
 			*sequence = vblank->sequence;
+			*event_ns = (uint64_t)vblank->tv_sec * 1000000000ULL +
+				    (uint64_t)vblank->tv_usec * 1000;
 			return 0;
 		}
 		offset += event->length;
@@ -533,6 +538,11 @@ int main(int argc, char **argv)
 	__u32 *crtc_ids = NULL;
 	__u32 connector_id = 0;
 	__u32 last_sequence = 0;
+	struct drm_gcn_get_param free_before = { .param = DRM_GCN_PARAM_MEM1_FREE_BYTES };
+	struct drm_gcn_get_param free_after = { .param = DRM_GCN_PARAM_MEM1_FREE_BYTES };
+	bool memory_baseline = false;
+	uint64_t last_event_ns = 0, interval_total = 0, interval_min = UINT64_MAX, interval_max = 0;
+	unsigned int gaps[9] = {};
 	uint64_t max_render_ns = 0;
 	uint64_t total_render_ns = 0;
 	void *src_map = MAP_FAILED;
@@ -572,6 +582,11 @@ int main(int argc, char **argv)
 		perror("DRM_IOCTL_SET_MASTER");
 		goto out;
 	}
+	if (xioctl(fd, DRM_IOCTL_GCN_GET_PARAM, &free_before)) {
+		perror("query initial MEM1 accounting");
+		goto out;
+	}
+	memory_baseline = true;
 	if (create_linear_bo(fd, &src, src_width, src_height, src_format,
 			     &src_map) < 0) {
 		perror("create linear source");
@@ -646,7 +661,7 @@ int main(int argc, char **argv)
 			.user_data = frame,
 		};
 		__u32 sequence;
-		uint64_t render_ns;
+		uint64_t render_ns, event_ns;
 
 		if (render_frame(fd, ctx.id, &src, src_map, next, frame,
 				 native, native_tiled, &render_ns) < 0) {
@@ -660,7 +675,7 @@ int main(int argc, char **argv)
 			perror("DRM_IOCTL_MODE_PAGE_FLIP");
 			goto out;
 		}
-		if (wait_flip_event(fd, flip.user_data, &sequence) < 0) {
+		if (wait_flip_event(fd, flip.user_data, &sequence, &event_ns) < 0) {
 			perror("wait page-flip event");
 			goto out;
 		}
@@ -669,6 +684,21 @@ int main(int argc, char **argv)
 				frame);
 			goto out;
 		}
+		if (completed) {
+			uint64_t interval;
+			__u32 gap = sequence - last_sequence;
+
+			if (!gap || event_ns <= last_event_ns) {
+				fprintf(stderr, "non-monotonic presentation event\n");
+				goto out;
+			}
+			interval = event_ns - last_event_ns;
+			interval_total += interval;
+			if (interval < interval_min) interval_min = interval;
+			if (interval > interval_max) interval_max = interval;
+			gaps[gap < 9 ? gap - 1 : 8]++;
+		}
+		last_event_ns = event_ns;
 		last_sequence = sequence;
 		if (!(frame % 30)) {
 			printf("gcn-kms-flip-test: frame=%u vblank=%u render-us=%llu\n",
@@ -676,6 +706,14 @@ int main(int argc, char **argv)
 			       (unsigned long long)(render_ns / 1000));
 			fflush(stdout);
 		}
+	}
+	if (completed > 1) {
+		printf("gcn-kms-flip-test: pacing intervals=%u total-ns=%llu min-ns=%llu max-ns=%llu gaps=",
+		       completed - 1, (unsigned long long)interval_total,
+		       (unsigned long long)interval_min, (unsigned long long)interval_max);
+		for (unsigned int i = 0; i < 9; i++)
+			printf("%s%u", i ? "," : "", gaps[i]);
+		puts("");
 	}
 	printf("gcn-kms-flip-test: PASS format=%s frames=%u last-vblank=%u pixels=%u",
 	       source_format_name(src_format, native, native_tiled), completed + 1,
@@ -699,15 +737,27 @@ out:
 	while (created) {
 		struct render_buffer *buffer = &buffers[--created];
 
-		if (buffer->fb.fb_id)
-			xioctl(fd, DRM_IOCTL_MODE_RMFB, &buffer->fb.fb_id);
-		close_bo(fd, &buffer->bo, buffer->map);
+		if (buffer->fb.fb_id && xioctl(fd, DRM_IOCTL_MODE_RMFB, &buffer->fb.fb_id))
+			ret = EXIT_FAILURE;
+		if (close_bo(fd, &buffer->bo, buffer->map))
+			ret = EXIT_FAILURE;
 	}
 	if (ctx.id) {
 		free_ctx.id = ctx.id;
-		xioctl(fd, DRM_IOCTL_GCN_CTX_FREE, &free_ctx);
+		if (xioctl(fd, DRM_IOCTL_GCN_CTX_FREE, &free_ctx))
+			ret = EXIT_FAILURE;
 	}
-	close_bo(fd, &src, src_map);
+	if (close_bo(fd, &src, src_map))
+		ret = EXIT_FAILURE;
+	if (memory_baseline) {
+		if (xioctl(fd, DRM_IOCTL_GCN_GET_PARAM, &free_after) || free_after.value != free_before.value) {
+			fprintf(stderr, "MEM1 accounting did not recover\n");
+			ret = EXIT_FAILURE;
+		} else {
+			printf("gcn-kms-flip-test: MEM1 recovered bytes=%llu\n",
+			       (unsigned long long)free_after.value);
+		}
+	}
 	free(crtc_ids);
 	free(connector_ids);
 	if (fd >= 0)

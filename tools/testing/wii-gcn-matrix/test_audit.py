@@ -890,6 +890,21 @@ class AuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-content'], 16, 0)
 
+    def test_display_pacing_and_cleanup_evidence(self):
+        log, client = [gzip.decompress((FIXTURES/(name+'.txt.gz')).read_bytes()).decode()
+            for name in ('display-rgb565','display-rgb565-client')]
+        spec=CASES['display-quiet-rgb565']
+        result=matrix.audit_presentation(log,client,spec,120,0)
+        self.assertEqual(result['completed'],120)
+        self.assertEqual(result['presentation_intervals'],118)
+        self.assertEqual(sum(result['vblank_gap_histogram']),118)
+        self.assertFalse(result['physical_screen_verified'])
+        for bad in (client.replace('MEM1 recovered','missing'),
+                    client.replace('restored previous console framebuffer','missing'),
+                    client.replace('intervals=118','intervals=117')):
+            with self.assertRaises(ValueError):
+                matrix.audit_presentation(log,bad,spec,120,0)
+
     def test_quiet_capture_requires_parameters_and_does_not_invent_batch_evidence(self):
         log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
             for name in ('bounded-quiet','bounded-quiet-client')]

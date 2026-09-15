@@ -2448,3 +2448,64 @@ unchanged; installed module SHA256 remains
 `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
 The experimental module was loaded only temporarily. Logging still defaults on;
 no installed provider or production defaults changed.
+
+## September 15: application-level KMS presentation and visible handoff
+
+Extended the existing page-flip client with event timestamp pacing, vblank-gap
+histograms, checked GEM/context cleanup and before/after MEM1 accounting. Each
+frame still performs full source generation and destination pixel verification
+before requesting a KMS flip. New display matrix cases present RGB565 scaling,
+XRGB8888 scaling and native tiled XRGB8888 through `/dev/dri/card0`, using the
+quiet cached candidate. `iterations` includes the initial modeset frame;
+N frames means N-1 flip events and N-2 measured inter-event intervals.
+
+The initial `wii-gcn-matrix-display-20260915-screen` stopped before hardware
+execution because the new case was omitted from client archival selection.
+Fixed that selection; preserve the initial directory as infrastructure ERROR.
+`-screen-r2` passed 120 frames in each format; `-sustained` passed 300 in each.
+Total: 1260 presented, fully pixel-verified frames, 387072000 destination checks.
+All six cases recovered the initial 524288 free MEM1 bytes, checked cleanup and
+restored the saved CRTC. No failed flips or pixel mismatches. Native tiled mode
+uses four identity-scale quadrants, so its result is not additional evidence
+for non-identity bounded scaling.
+
+| Sustained format | Render average/max ms | Mean presentation interval ms |
+|---|---:|---:|
+| RGB565 scaled | 22.001 / 45.445 | 165.714 |
+| XRGB8888 scaled | 23.441 / 46.729 | 167.281 |
+| XRGB8888 native tiled | 79.645 / 132.216 | 243.868 |
+
+These intervals include source generation and an expensive full CPU pixel
+oracle; they are not ordinary application FPS or a promised frame deadline.
+Histogram bins describe observed sequence gaps, not an asserted missed-deadline
+count. The API audit labels physical_screen_verified=false because it cannot
+verify the physical feed; separate visual evidence follows.
+
+The user identified the open VLC capture `v4l2:///dev/video0`. Observed its color
+quadrants, grid, central checker and moving cyan marker; a 12-second capture and
+one-frame-per-second contact sheet showed marker progression and wrap without
+obvious persistent corruption. The user reported "looks good to me". These are
+sampled observations, not exhaustive transient tearing/flicker detection.
+Artifacts are in `/media/anolis/dev/wii-gcn-display-visual-20260915`. The file
+`rgb565-live` names indicate the intended sample; captures were not synchronized
+to per-format matrix boundaries, so do not assign them exact per-format coverage.
+`console-after.png` captured completed runner notices, not native rendering.
+
+WiiDesk PID 790 was never stopped. Its inactive-VT greeter was visible before;
+runner notices left tty1 visible afterward. `chvt` was absent; `busybox chvt 7`
+resumed the existing session. Verified tty7 active and the greeter visible in
+`desktop-after.png`. No credentials or authenticated workflows were exercised.
+WiiDesk uses CPU dumb buffers and is not itself a scaled-render oracle.
+MemAvailable was 26168 KiB before and 26308 KiB after: no aggregate decline in
+these snapshots, but this is not a precise system-memory leak measurement.
+
+The proposed loading preset and rollback point are recorded in
+[wii-gcn-bounded-candidate-2026-09-15.md](wii-gcn-bounded-candidate-2026-09-15.md).
+No source default or installed module changed. All 92 tests pass; strict client
+build, successful suite checksums and final cleanup verify. Experimental module
+SHA256 `6b0b956f7a02c6e05b22351b86e82b928345affa95cad6bac39b36b071229f64`;
+installed provider remains `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+Presentation client SHA256:
+`e452239c52aa428ad4a7aaaac965756a0fc8af2e234fc0d90fc1f5f60d7f228b`.
+The final current-audit rerun accepts all six successful cases. The visual
+archive has its own checksum manifest and sampling limitations in README.txt.

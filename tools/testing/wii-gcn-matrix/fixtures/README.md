@@ -53,3 +53,8 @@ of the simpler offset geometry.
 records and explicit mode parameter checks, with no per-batch diagnostics.
 Tests reject missing mode checks, unexpected bounded diagnostic records, and
 attempts to treat this as a full batch-evidence capture.
+
+`display-rgb565{,-client}.txt.gz`: 120-frame real KMS screen from
+`wii-gcn-matrix-display-20260915-screen-r2`. Includes 118 presentation intervals,
+full buffer pixel verification, CRTC restoration, and MEM1 recovery. Tests reject
+missing restoration/accounting or inconsistent pacing counts.

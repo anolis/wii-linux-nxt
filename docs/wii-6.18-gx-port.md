@@ -22518,3 +22518,12 @@ do not show a reliable speedup. Quiet audit output explicitly lacks batch-level
 evidence and requires loaded-parameter checks. All 91 tests pass, cleanup and
 archives verify, and logging remains enabled by default. Installed driver
 unchanged; see the fault investigation report for hashes and scope.
+
+September 15 real display validation: 120-frame screens and 300-frame sustained
+runs passed in RGB565 scaled, XRGB8888 scaled and native tiled modes (1260 frames,
+387072000 pixel checks). KMS events, CRTC restoration and MEM1 recovery verified.
+VLC samples showed the expected moving pattern; the user reported it looked
+good. WiiDesk PID 790 survived and was resumed on tty7 with its greeter visible.
+Cadence includes a full CPU oracle and is not normal application FPS. Authenticated
+desktop workflows were not exercised. All 92 tests pass. See the bounded-candidate
+preset/rollback document and investigation report; installed driver unchanged.
