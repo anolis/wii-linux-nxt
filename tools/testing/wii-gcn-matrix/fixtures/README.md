@@ -41,3 +41,9 @@ the last repeated `--expect-param`; the current audit rejects this capture as
 missing explicit cache-parameter verification. Do not use it as qualified data.
 `bounded-cache-verified{,-client}.txt.gz` is the corrected round-four capture,
 with both cache and identity parameters verified and all 32 calls passing.
+
+`mixed-cache-{400,600}{,-client}.txt.gz`: verified 16-call screens from
+`wii-gcn-matrix-mixed-cache-20260915-screen`. The tall odd mixed-axis geometry
+forces horizontal 640+125-quad submissions, and final 400+108 or one 508-quad
+submission. Tests reject incorrect final horizontal batch size and substitution
+of the simpler offset geometry.

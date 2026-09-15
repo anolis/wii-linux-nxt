@@ -846,3 +846,16 @@ the full destination including preserved surroundings and checks source
 integrity; system enlargement cycles eight patterns with CPU profiling. Each
 workload stops at its first client mismatch. The same geometry/batch audits and
 explicit cache-parameter check apply to every cached case.
+
+### Mixed-axis batch-boundary repetition
+
+`bounded-both-mixed-cached-600` and `bounded-both-mixed-cached-400` select
+`--offset-mixed-repeat N`. They repeat the existing tall odd regression geometry:
+source (1,1)255x255 to destination (0,61)256x127 within 256x256 tiled objects.
+Each call checks the entire destination, preserved surroundings, and source
+integrity. Horizontal rendering emits 765 quads in batches 640+125; the break
+falls inside a three-piece column and each column ends with a 15-pixel tail.
+Final rendering emits 508 quads, either one batch (600 limit) or 400+108.
+The audit requires these exact geometries, batch counts and byte budgets;
+a normal offset run cannot satisfy this case. Both cases enable and verify
+the coordinate cache and stop at the first mismatch.

@@ -214,6 +214,11 @@ for workload in ('offset', 'reduce-content'):
                       bounded_horizontal=True, bounded_workload=workload,
                       coord_cache=True, experimental=True))
 
+for limit in (600, 400):
+    CASES.append(dict(case(f'bounded-both-mixed-cached-{limit}', [], '', 0, 0), bounded=True,
+                      bounded_horizontal=True, bounded_workload='offset', mixed_offset=True,
+                      bounded_batch_quads=limit, coord_cache=True, experimental=True))
+
 for name, baseline, content in [('system-baseline-timed', True, False),
                                 ('bounded-both-system-timed', False, False),
                                 ('bounded-both-system-content', False, True)]:
@@ -345,9 +350,13 @@ def audit_bounded_workload(log, client_log, spec, requested, rc):
         'system': ('SYSTEM', [0, 0, 640, 240, 480, 240, 2400], 307200),
         'reduce-content': ('REDUCE', [0, 0, 320, 240, 120, 120, 600], 38400),
     }[workload]
+    if spec.get('mixed_offset'):
+        geometry = [0, 61, 256, 255, 127, 127, 508]
     if spec.get('bounded_horizontal'):
         geometry_h = {'offset': [255,256,79,255,255], 'system': [320,640,240,320,640],
                       'reduce-content': [640,320,240,320,640]}[workload]
+        if spec.get('mixed_offset'):
+            geometry_h = [255,256,255,255,765]
         require(result['horizontal_geometries'] == [geometry_h] * result['bounded_calls'],
                 'wrong horizontal workload geometry')
     progress = re.findall(rf'{prefix}: (\d+)/(\d+) iterations', client_log)
@@ -1048,6 +1057,8 @@ def main():
                         command[-1] += ' scale_system_trace=1'
                     if spec.get('bounded_horizontal_split'):
                         command[-1] += ' scale_system_split=1'
+                if spec.get('mixed_offset'):
+                    command[command.index('--client-args') + 1] = f'--offset-mixed-repeat {args.iterations}'
                 if spec.get('system_baseline'):
                     command[-1] = ''
                 if spec.get('system_content'):

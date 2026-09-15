@@ -3701,9 +3701,11 @@ out:
 		fail("close 640-wide scaled-blit source");
 }
 
-static void test_offset_enlarge(int fd, unsigned int iterations)
+static void test_offset_enlarge(int fd, unsigned int iterations, bool mixed)
 {
-	const struct scaled_blit_case test = {
+	const struct scaled_blit_case test = mixed ? (struct scaled_blit_case) {
+		"tall odd mixed-axis scale", 1, 1, 255, 255, 0, 61, 256, 127, false,
+	} : (struct scaled_blit_case) {
 		"full-width enlargement", 0, 43, 255, 79, 0, 97, 256, 79, false,
 	};
 	struct drm_gcn_ctx_create ctx = {};
@@ -4357,7 +4359,8 @@ int main(int argc, char **argv)
 	bool profile_repeat = sched_repeat || (argc > 2 && !strcmp(argv[1], "--system-profile-repeat"));
 	bool system_content = profile_repeat || (argc > 2 && !strcmp(argv[1], "--system-content-repeat"));
 	bool system_repeat = system_content || (argc > 2 && !strcmp(argv[1], "--system-enlarge-repeat"));
-	bool offset_repeat = argc > 2 && !strcmp(argv[1], "--offset-enlarge-repeat");
+	bool offset_mixed_repeat = argc > 2 && !strcmp(argv[1], "--offset-mixed-repeat");
+	bool offset_repeat = offset_mixed_repeat || (argc > 2 && !strcmp(argv[1], "--offset-enlarge-repeat"));
 	unsigned int repeat_iterations = 1;
 	bool offset_only = argc > 1 && !strcmp(argv[1], "--offset-enlarge-only");
 	int mode_args = hold + linear_only + wide_reduce_only + uniform_only +
@@ -4507,7 +4510,7 @@ int main(int argc, char **argv)
 		}
 		if (offset_only || offset_repeat) {
 			if (features & DRM_GCN_FEATURE_BLIT_SCALED_RGB565) {
-				test_offset_enlarge(fd, offset_repeat ? repeat_iterations : 2000);
+				test_offset_enlarge(fd, offset_repeat ? repeat_iterations : 2000, offset_mixed_repeat);
 			} else
 				fail_value("scaled RGB565 capability", features,
 					   DRM_GCN_FEATURE_BLIT_SCALED_RGB565);

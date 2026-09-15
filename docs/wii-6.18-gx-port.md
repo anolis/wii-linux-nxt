@@ -22500,3 +22500,11 @@ client binaries were unchanged from the cache experiment. Cache/bounded helpers
 remain opt-in; installed provider and final Wii state are unchanged. See the
 fault investigation report and `wii-gcn-matrix-coord-cache-20260915-qualification`
 archive for detailed evidence and scope.
+
+September 15 mixed-axis follow-up: repeated the tall odd 255x255 to 256x127
+offset geometry 1000 times under each cached final batch limit, 400 and 600.
+Both passed, verifying 131072000 destination pixels and the horizontal
+640+125-quad split inside a column. Default regression also passed. Added the
+repeat selector, exact matrix geometry audits, and real rejection-control
+fixtures; all 90 tests pass. Driver/module unchanged; cleanup verified. See
+`wii-gcn-matrix-mixed-cache-20260915-{screen,long}` and the investigation report.

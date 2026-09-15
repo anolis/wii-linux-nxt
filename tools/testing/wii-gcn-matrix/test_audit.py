@@ -890,6 +890,22 @@ class AuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             matrix.audit_bounded_workload(log, client, CASES['bounded-both-system-content'], 16, 0)
 
+    def test_mixed_axis_cache_requires_cross_column_batches(self):
+        for limit in (600,400):
+            log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
+                for name in (f'mixed-cache-{limit}',f'mixed-cache-{limit}-client')]
+            spec = CASES[f'bounded-both-mixed-cached-{limit}']
+            result = matrix.audit_bounded_workload(log, client, spec, 16, 0)
+            self.assertEqual(result['completed'],16)
+            self.assertEqual(result['horizontal_draw_submissions'],32)
+            self.assertEqual(result['client_pixels_checked'],16*65536)
+            for bad in (log.replace('quads=125','quads=124',1),
+                        log.replace('src_width=255 dst_width=256 height=255','src_width=255 dst_width=256 height=79',1)):
+                with self.assertRaises(ValueError):
+                    matrix.audit_bounded_workload(bad, client, spec, 16, 0)
+            with self.assertRaises(ValueError):
+                matrix.audit_bounded_workload(log, client, CASES['bounded-both-offset-cached'],16,0)
+
     def test_verified_coordinate_cache_keeps_complete_pixel_and_batch_evidence(self):
         log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
             for name in ('bounded-cache-verified','bounded-cache-verified-client')]

@@ -2355,3 +2355,44 @@ All 89 existing tests pass. Final checks confirm module/lock absent, tracefs
 unmounted, unchanged boot UUID `444193a6-aee4-4ae3-a619-4f6dd90fccf1` and printk
 `7 4 1 7`, and installed provider SHA256
 `a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+
+## September 15: repeated mixed-axis batch boundaries
+
+The prior cached qualification's repeated workloads did not exercise a
+horizontal batch boundary inside a column. That geometry appeared once in the
+expanded regression. Added `--offset-mixed-repeat N`, reusing that exact tall
+odd case: source (1,1)255x255 to destination (0,61)256x127 in 256x256 tiled objects.
+The existing oracle checks all destination pixels, preserved surroundings,
+source integrity and final MEM1 accounting. No driver changes.
+
+New cases `bounded-both-mixed-cached-600` and `-400` both use cached coordinates.
+Horizontal rendering requires 255 nearest runs with three pieces each: 765
+quads, split 640+125. The boundary falls inside a column; its final piece has
+height 15. Final rendering has 127 runs with four pieces each: 508 quads, one
+batch at limit 600 or 400+108 at limit 400. Audits independently require the
+exact geometries, runs, batches, byte budgets and cache parameter verification.
+
+`/media/anolis/dev/wii-gcn-matrix-mixed-cache-20260915-screen` passed 16/16 for
+each limit. Real fixtures now reject a shortened 125-quad batch and substitution
+of the previous simpler offset geometry. All 90 audit tests pass, including the
+actual-helper byte-equivalence test. The client builds with strict warnings.
+The following `-long` suite reverses order (400 then 600), requests 1000 calls
+per limit, stops each case at its first mismatch, and ends with default regression.
+
+The long suite passed 1000/1000 for both limits and the default regression.
+Those 2000 mixed-axis calls verified 131072000 destination pixels, plus source
+integrity, preservation and memory-accounting checks. The 32 screening calls
+add 2097152 destination pixel checks. Each long case audited 2000 horizontal
+submissions; the final stage used 2000 submissions at limit 400 and 1000 at
+limit 600. This closes repeated hardware coverage of the cross-column boundary
+for this geometry; it is not a claim that every possible geometry is qualified.
+
+Client SHA256:
+`453bc6347bbb72932ad811dd1022cae75cddf6b7aa87a95b983f02e5c93da8e9`.
+Experimental module is unchanged:
+`6622626caa185a8f7e2cbbe7c74fa1c46d7ec65e2fa61744e8756e9a54ca116e`.
+All screen/long manifests and fresh audits verify. All 90 tests pass, strict
+client build and diff checks pass. Final checks confirm module/lock absent,
+tracefs unmounted, boot UUID/printk unchanged, and installed provider SHA256
+`a2e7df8e7f62d85b1c4d107b9142addb7bbf2ab0cf8812aa295dde3c8eea5d09`.
+No driver implementation, production default, or installed binary changed.
