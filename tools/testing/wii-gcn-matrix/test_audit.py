@@ -905,6 +905,25 @@ class AuditTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 matrix.audit_presentation(log,bad,spec,120,0)
 
+    def test_display_prepared_source_evidence(self):
+        log, client = [gzip.decompress((FIXTURES/(name+'.txt.gz')).read_bytes()).decode()
+            for name in ('display-prepared-rgb565','display-prepared-rgb565-client')]
+        spec = CASES['display-prepared-rgb565']
+        result = matrix.audit_presentation(log, client, spec, 120, 0)
+        self.assertEqual(result['source_mode'], 'prepared')
+        self.assertEqual(result['pixel_verified_frames'], 2)
+        marker = 'gcn-kms-flip-test: source mode=prepared generations=1'
+        for bad in (client.replace(marker, ''), client + marker + '\n',
+                    client.replace('generations=1', 'generations=120'),
+                    client.replace('mode=prepared', 'mode=dynamic')):
+            with self.assertRaises(ValueError):
+                matrix.audit_presentation(log, bad, spec, 120, 0)
+        with self.assertRaises(ValueError):
+            matrix.audit_presentation(log, client, CASES['display-stages-rgb565'], 120, 0)
+        dynamic = gzip.decompress((FIXTURES/'display-stages-rgb565-client.txt.gz').read_bytes()).decode()
+        with self.assertRaises(ValueError):
+            matrix.audit_presentation(log, dynamic, spec, 120, 0)
+
     def test_display_stage_profile_accounting(self):
         import re
         log, client = [gzip.decompress((FIXTURES/(name+'.txt.gz')).read_bytes()).decode()

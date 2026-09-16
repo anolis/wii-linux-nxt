@@ -922,3 +922,14 @@ including scheduling delays. Presentation intervals have their own denominator
 (`completed - 2`). These averages therefore have different sample populations.
 The instrumented client also emits stages during fully checked display runs;
 old non-stage captures remain supported by non-stage cases.
+
+
+`display-prepared-{rgb565,xrgb8888,xrgb8888-native-tiled}` runs the KMS client's
+`--prepared-source` mode. It implies boundary checks, generates the frame-zero
+source once, and keeps all destination clearing/rendering/flip operations.
+The static source remains unchanged throughout the run. The auditor requires
+`source mode=prepared generations=1`; dynamic cases reject that evidence.
+`source_mode` distinguishes these results from dynamic-source captures.
+Source timing includes the initial generation, amortized over all frames when
+reporting a per-frame average. These cases measure static source reuse, not
+animated-content throughput or a full pixel-fault qualification.

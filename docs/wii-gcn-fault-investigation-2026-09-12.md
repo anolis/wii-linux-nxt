@@ -2604,3 +2604,53 @@ installed module checksum stayed unchanged, with no temporary module, lock or
 tracefs mount left behind. Strict client build and 94 host/audit tests passed.
 The real RGB565 stage capture is a fixture, with negative tests for missing,
 duplicate, miscounted, zero-valued and inconsistent timing evidence.
+
+
+## 2026-09-15: reuse a prepared static source
+
+Added display-only `--prepared-source`, which implies boundary pixel checking.
+It generates the frame-zero source once and reuses that BO for subsequent
+renders. Destination sentinel clearing, every render ioctl/completion wait,
+every flip/event check, and initial/final pixel verification remain. The oracle
+uses frame-zero content in this mode. No additional source allocation, driver
+change or persistent installation is involved. The source summary records mode
+and generation count; prepared matrix cases require exactly one generation and
+reject substitution with dynamic-source captures.
+
+Six 120-frame cases passed in
+`/media/anolis/dev/wii-gcn-matrix-display-prepared-20260915-r1`: dynamic then
+prepared for each format. This is 720 presentations, 12 pixel-verified frames,
+and 3686400 destination pixel checks. Unchecked intermediate frames are not
+additional clean pixel trials. Client SHA256:
+`3cb7e831e169cd014312a196e70bcf271ab5a294d1ae48adf4aa1aeeff6d3b83`.
+The temporary quiet cached bounded module remains
+`6b0b956f7a02c6e05b22351b86e82b928345affa95cad6bac39b36b071229f64`.
+
+| Format | Dynamic/prepared mean interval ms | Dynamic/prepared source ms per frame | Dynamic/prepared render ms per frame |
+|---|---:|---:|---:|
+| RGB565 scaling | 68.147 / 50.616 | 17.540 / 0.194 | 21.937 / 22.439 |
+| XRGB8888 scaling | 68.995 / 54.292 | 18.007 / 0.138 | 23.988 / 23.248 |
+| Native tiled XRGB8888 | 175.316 / 102.079 | 69.703 / 0.634 | 80.523 / 76.371 |
+
+Prepared source averages amortize the one initial generation across 120 frames;
+they are not the cost of regenerating a frame. Interval means cover 118 gaps and
+include the final oracle. As before, all measurements are elapsed, including
+scheduling delays. This single ordered paired sweep supports a substantial source
+reuse benefit, not a precise general speedup estimate. Static content differs
+from the dynamic moving-marker pattern and cannot establish animated-content
+performance or detect stale content by its appearance alone. The final sentinel
+clear and pixel oracle still check that the final destination was rendered.
+No new physical-screen observation is claimed.
+
+All six raw captures re-audited successfully; SHA256SUMS covers the archive.
+Strict client compilation and 95 host/audit tests passed, including a real
+prepared-source fixture with missing/duplicate/wrong-count and mode-substitution
+negative cases. The same WiiDesk PID 790 resumed on tty7. Boot UUID, printk and
+installed provider checksum remained unchanged, with temporary module, lock and
+tracefs absent after cleanup.
+
+Next useful application-oriented experiment: retain the background and update
+only the old/new moving-marker regions in the source, preserving changing
+content while avoiding full CPU pattern regeneration. Keep this as a distinct
+workload and retain boundary pixel checks and stage timings. Destination
+rendering would remain unchanged initially, to isolate source update cost.

@@ -204,6 +204,11 @@ for format_name in ('rgb565', 'xrgb8888', 'xrgb8888-native-tiled'):
                       presentation=True, boundary_checks=True, stage_profile=True,
                       display_format=format_name, experimental=True))
 
+for format_name in ('rgb565', 'xrgb8888', 'xrgb8888-native-tiled'):
+    CASES.append(dict(case(f'display-prepared-{format_name}', [], '', 0, 0),
+                      presentation=True, boundary_checks=True, stage_profile=True,
+                      prepared_source=True, display_format=format_name, experimental=True))
+
 CASES.append(dict(case('render-regression', [], '', 0, 0), regression=True, experimental=True))
 CASES.append(dict(case('bounded-final-regression', [], '', 0, 0), regression=True, bounded=True, experimental=True))
 for workload in ('offset', 'system', 'reduce-content'):
@@ -318,6 +323,10 @@ def audit_presentation(log, client, spec, requested, rc):
     n,total,minimum,maximum=map(int,pace[0][:4]);gaps=list(map(int,pace[0][4].split(',')))
     require(n==requested-2 and n>0 and len(gaps)==9 and sum(gaps)==n
             and 0<minimum<=maximum and n*minimum<=total<=n*maximum,'invalid presentation pacing')
+    sources = re.findall(r'gcn-kms-flip-test: source mode=(\S+) generations=(\d+)', client)
+    expected_source = ('prepared', '1') if spec.get('prepared_source') else ('dynamic', str(requested))
+    require(sources == [expected_source] or (not sources and not spec.get('prepared_source')),
+            'wrong source preparation mode/count')
     stages = re.findall(r'gcn-kms-flip-test: stages frames=(\d+) verified=(\d+) flips=(\d+) source-ns=(\d+) clear-ns=(\d+) render-ns=(\d+) verify-ns=(\d+) flip-wait-ns=(\d+)', client)
     require(len(stages) == 1 or (not stages and not spec.get('stage_profile')),
             'missing/duplicate stage profile')
@@ -334,7 +343,7 @@ def audit_presentation(log, client, spec, requested, rc):
                 evidence_mode='boundary-verified-buffers-and-KMS-events' if spec.get('boundary_checks') else 'verified-buffers-and-KMS-events',physical_screen_verified=False,
                 render_us_avg=int(rows[0][4]),render_us_max=int(rows[0][5]),
                 presentation_intervals=n,presentation_total_ns=total,presentation_min_ns=minimum,
-                presentation_max_ns=maximum,vblank_gap_histogram=gaps,**profile)
+                presentation_max_ns=maximum,vblank_gap_histogram=gaps,source_mode=expected_source[0],**profile)
 
 def audit_regression(log, client_log, requested, rc):
     require('CPU console restored' in log, 'regression cleanup missing')
@@ -1146,7 +1155,7 @@ def main():
                 if spec.get('presentation'):
                     command = ['tools/wii-gcn-render-cycle.sh', '--host', args.host, '--module', str(module),
                                '--client', str(directory / 'render-client'), '--quiet-kernel',
-                               '--client-args', f'/dev/dri/card0 {args.iterations-1} {spec["display_format"]}' + (' --boundary-checks' if spec.get('boundary_checks') else ''),
+                               '--client-args', f'/dev/dri/card0 {args.iterations-1} {spec["display_format"]}' + (' --prepared-source' if spec.get('prepared_source') else ' --boundary-checks' if spec.get('boundary_checks') else ''),
                                '--module-args', 'scale_bounded_final=1 scale_bounded_horizontal=1 scale_bounded_coord_cache=1 scale_bounded_log=0']
                     for name,value in (('scale_bounded_final','Y'),('scale_bounded_horizontal','Y'),
                                        ('scale_bounded_coord_cache','Y'),('scale_bounded_log','N')):

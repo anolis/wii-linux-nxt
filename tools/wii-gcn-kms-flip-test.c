@@ -32,7 +32,8 @@
 static bool swap_red_white;
 static bool rotate_rgb;
 static bool content_cycle;
-static bool boundary_checks;
+static bool boundary_checks, prepared_source;
+static unsigned int source_generations;
 static unsigned int final_frame, verified_frames;
 static uint64_t source_ns, clear_ns, verify_ns;
 
@@ -319,17 +320,20 @@ static int render_frame(int fd, __u32 ctx_id,
 	uint64_t start, end;
 
 	start = monotonic_ns();
-	for (y = 0; y < src->height; y++) {
-		for (x = 0; x < src->width; x++) {
-			uint32_t pixel = pattern_xrgb8888(x, y, frame,
-						      src->width, src->height);
-			size_t offset = (size_t)y * src->width + x;
+	if (!prepared_source || frame == 0) {
+		source_generations++;
+		for (y = 0; y < src->height; y++) {
+			for (x = 0; x < src->width; x++) {
+				uint32_t pixel = pattern_xrgb8888(x, y, frame,
+							      src->width, src->height);
+				size_t offset = (size_t)y * src->width + x;
 
-			if (src->format == DRM_GCN_GEM_FORMAT_XRGB8888)
-				((uint32_t *)src_map)[offset] = pixel;
-			else
-				((uint16_t *)src_map)[offset] =
-					xrgb8888_to_rgb565(pixel);
+				if (src->format == DRM_GCN_GEM_FORMAT_XRGB8888)
+					((uint32_t *)src_map)[offset] = pixel;
+				else
+					((uint16_t *)src_map)[offset] =
+						xrgb8888_to_rgb565(pixel);
+			}
 		}
 	}
 	end = monotonic_ns();
@@ -378,7 +382,7 @@ static int render_frame(int fd, __u32 ctx_id,
 				scaled_source(x, src->width, DST_WIDTH);
 			unsigned int sy = native ? y :
 				scaled_source(y, src->height, DST_HEIGHT);
-			uint32_t source = pattern_xrgb8888(sx, sy, frame,
+			uint32_t source = pattern_xrgb8888(sx, sy, prepared_source ? 0 : frame,
 						       src->width, src->height);
 			uint16_t expected = xrgb8888_to_rgb565(source);
 			uint16_t actual = ((uint16_t *)dst->map)
@@ -569,13 +573,14 @@ int main(int argc, char **argv)
 	int fd = -1;
 	int ret = EXIT_FAILURE;
 
-	boundary_checks = argc == 5 && !strcmp(argv[4], "--boundary-checks");
+	prepared_source = argc == 5 && !strcmp(argv[4], "--prepared-source");
+	boundary_checks = prepared_source || (argc == 5 && !strcmp(argv[4], "--boundary-checks"));
 	final_frame = flip_count;
 	if (argc > 6 || (argc > 4 && !offscreen && !boundary_checks) ||
 	    (argc > 5 && strcmp(argv[5], "--swap-red-white") &&
 	     strcmp(argv[5], "--rotate-rgb") && strcmp(argv[5], "--content-cycle"))) {
 		fprintf(stderr,
-			"usage: %s [card [count [format [--boundary-checks|--offscreen [--swap-red-white|--rotate-rgb|--content-cycle]]]]]\n",
+			"usage: %s [card [count [format [--prepared-source|--boundary-checks|--offscreen [--swap-red-white|--rotate-rgb|--content-cycle]]]]]\n",
 			argv[0]);
 		return EXIT_FAILURE;
 	}
@@ -736,6 +741,8 @@ int main(int argc, char **argv)
 			printf("%s%u", i ? "," : "", gaps[i]);
 		puts("");
 	}
+	printf("gcn-kms-flip-test: source mode=%s generations=%u\n",
+	       prepared_source ? "prepared" : "dynamic", source_generations);
 	printf("gcn-kms-flip-test: stages frames=%u verified=%u flips=%u source-ns=%llu clear-ns=%llu render-ns=%llu verify-ns=%llu flip-wait-ns=%llu\n",
 	       completed + 1, verified_frames, completed,
 	       (unsigned long long)source_ns, (unsigned long long)clear_ns,

@@ -67,3 +67,7 @@ and substitution between full-oracle and boundary-only evidence.
 `display-stages-rgb565{,-client}.txt.gz`: 120-frame boundary-only stage profile
 from `wii-gcn-matrix-display-stages-20260915-r1`. Tests require a unique profile,
 correct frame/verification/flip counts, positive totals, and render-total agreement.
+
+`display-prepared-rgb565{,-client}.txt.gz`: 120-frame static-source reuse capture
+from `wii-gcn-matrix-display-prepared-20260915-r1`. Tests reject absent/duplicate
+source records, incorrect generation counts and dynamic/prepared substitution.
