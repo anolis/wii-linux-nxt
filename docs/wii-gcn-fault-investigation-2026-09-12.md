@@ -2559,3 +2559,48 @@ field counted presentations; explicit pixel totals and `pixel_verified_frames`
 were already correct). `SHA256SUMS` covers the complete archive, including raw
 captures, archived sources, original summaries and re-audit. A real RGB565
 boundary capture is included as a regression fixture.
+
+
+## 2026-09-15: display stage timing
+
+The KMS client now accumulates monotonic elapsed totals for source-pattern
+preparation, destination sentinel clearing, render ioctls plus completion wait,
+pixel verification, and flip submission plus event wait. It emits one summary
+at completion. The matrix adds `display-stages-*` cases requiring this record,
+validates frame/check/flip counts and positive totals, and cross-checks the
+render total against the existing average. Older captures remain auditable.
+These are elapsed measurements including preemption, not exclusive CPU or GPU
+time; flip timing includes both the submission ioctl and event wait.
+
+`/media/anolis/dev/wii-gcn-matrix-display-stages-20260915-r1` passed all three
+120-frame boundary-check cases: 360 presentations, six pixel-verified frames,
+1843200 pixel checks. Intermediate frames are not clean pixel trials. The client
+SHA256 is `89d7f8c925ac60d811f0bb6b04b868bd85775fbab2ff3f6e5d3cc32daf1f77cc`;
+the quiet cached bounded module is unchanged (`6b0b956f...229f64`).
+
+| Format | Source/frame ms | Clear/frame ms | Render/frame ms | Oracle/checked frame ms | Flip submission+wait/flip ms | Mean presentation interval ms |
+|---|---:|---:|---:|---:|---:|---:|
+| RGB565 scaling | 17.382 | 3.681 | 22.497 | 89.259 | 23.579 | 67.864 |
+| XRGB8888 scaling | 17.380 | 3.485 | 23.004 | 88.793 | 23.765 | 68.430 |
+| Native tiled XRGB8888 | 68.717 | 2.765 | 76.451 | 71.072 | 21.625 | 170.226 |
+
+Source/clear/render averages cover 120 frames, oracle averages two checked
+frames, flip averages 119 flips, and presentation intervals 118 gaps. These
+populations differ, so stage averages should not be summed as an exact
+presentation-interval identity. Initialization, reporting and cleanup are outside
+the stage totals. The final oracle remains inside the last presentation gap.
+
+The CPU-generated test pattern is a material cost, especially at native size
+(four times the source pixels and approximately four times the preparation
+elapsed time). Native rendering also issues four identity blits. A useful next
+experiment is an explicitly separate workload reusing prepared source data,
+with the same correctness boundaries and stage measurements. This would measure
+potential application reuse, not justify skipping correctness checks or changing
+driver defaults. Current results do not establish normal application FPS.
+
+All captures were re-audited and archived with `SHA256SUMS`. All cases restored
+the CRTC and MEM1 accounting. WiiDesk PID 790 resumed on tty7; boot, printk and
+installed module checksum stayed unchanged, with no temporary module, lock or
+tracefs mount left behind. Strict client build and 94 host/audit tests passed.
+The real RGB565 stage capture is a fixture, with negative tests for missing,
+duplicate, miscounted, zero-valued and inconsistent timing evidence.

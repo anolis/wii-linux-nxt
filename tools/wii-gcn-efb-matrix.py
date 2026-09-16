@@ -199,6 +199,11 @@ for format_name in ('rgb565', 'xrgb8888', 'xrgb8888-native-tiled'):
     CASES.append(dict(case(f'display-paced-{format_name}', [], '', 0, 0),
                       presentation=True, boundary_checks=True, display_format=format_name, experimental=True))
 
+for format_name in ('rgb565', 'xrgb8888', 'xrgb8888-native-tiled'):
+    CASES.append(dict(case(f'display-stages-{format_name}', [], '', 0, 0),
+                      presentation=True, boundary_checks=True, stage_profile=True,
+                      display_format=format_name, experimental=True))
+
 CASES.append(dict(case('render-regression', [], '', 0, 0), regression=True, experimental=True))
 CASES.append(dict(case('bounded-final-regression', [], '', 0, 0), regression=True, bounded=True, experimental=True))
 for workload in ('offset', 'system', 'reduce-content'):
@@ -313,12 +318,23 @@ def audit_presentation(log, client, spec, requested, rc):
     n,total,minimum,maximum=map(int,pace[0][:4]);gaps=list(map(int,pace[0][4].split(',')))
     require(n==requested-2 and n>0 and len(gaps)==9 and sum(gaps)==n
             and 0<minimum<=maximum and n*minimum<=total<=n*maximum,'invalid presentation pacing')
+    stages = re.findall(r'gcn-kms-flip-test: stages frames=(\d+) verified=(\d+) flips=(\d+) source-ns=(\d+) clear-ns=(\d+) render-ns=(\d+) verify-ns=(\d+) flip-wait-ns=(\d+)', client)
+    require(len(stages) == 1 or (not stages and not spec.get('stage_profile')),
+            'missing/duplicate stage profile')
+    profile = {}
+    if stages:
+        values = list(map(int, stages[0]))
+        require(values[:3] == [requested, verified_frames, requested-1]
+                and all(value > 0 for value in values[3:]), 'invalid stage profile')
+        require(values[5] // requested // 1000 == int(rows[0][4]),
+                'stage render total disagrees with render average')
+        profile = dict(zip(('source_ns','clear_ns','render_ns','verify_ns','flip_wait_ns'), values[3:]))
     return dict(case=spec['name'],status='PASS',requested=requested,completed=requested,checked=verified_frames,
                 client_pixels_checked=verified_frames*307200,pixel_verified_frames=verified_frames,raw_errors=None,copy_errors=None,
                 evidence_mode='boundary-verified-buffers-and-KMS-events' if spec.get('boundary_checks') else 'verified-buffers-and-KMS-events',physical_screen_verified=False,
                 render_us_avg=int(rows[0][4]),render_us_max=int(rows[0][5]),
                 presentation_intervals=n,presentation_total_ns=total,presentation_min_ns=minimum,
-                presentation_max_ns=maximum,vblank_gap_histogram=gaps)
+                presentation_max_ns=maximum,vblank_gap_histogram=gaps,**profile)
 
 def audit_regression(log, client_log, requested, rc):
     require('CPU console restored' in log, 'regression cleanup missing')

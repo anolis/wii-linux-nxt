@@ -905,6 +905,23 @@ class AuditTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 matrix.audit_presentation(log,bad,spec,120,0)
 
+    def test_display_stage_profile_accounting(self):
+        import re
+        log, client = [gzip.decompress((FIXTURES/(name+'.txt.gz')).read_bytes()).decode()
+            for name in ('display-stages-rgb565','display-stages-rgb565-client')]
+        spec = CASES['display-stages-rgb565']
+        result = matrix.audit_presentation(log, client, spec, 120, 0)
+        self.assertEqual(result['render_ns'] // 120 // 1000, result['render_us_avg'])
+        self.assertGreater(result['source_ns'], 0)
+        stage = next(line for line in client.splitlines() if ': stages ' in line)
+        for bad in (client.replace(stage, ''), client + stage + '\n',
+                    client.replace(stage, stage.replace('verified=2', 'verified=120')),
+                    client.replace(stage, stage.replace('flips=119', 'flips=120')),
+                    re.sub(r'source-ns=\d+', 'source-ns=0', client),
+                    re.sub(r'render-ns=\d+', 'render-ns=1', client)):
+            with self.assertRaises(ValueError):
+                matrix.audit_presentation(log, bad, spec, 120, 0)
+
     def test_display_boundary_checks_are_not_full_pixel_coverage(self):
         log, client = [gzip.decompress((FIXTURES/(name+'.txt.gz')).read_bytes()).decode()
             for name in ('display-paced-rgb565','display-paced-rgb565-client')]

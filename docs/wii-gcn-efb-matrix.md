@@ -911,3 +911,14 @@ preset. Results distinguish `completed` presentations from `checked` /
 used as 120-frame pixel-fault qualification. Timing includes source generation,
 clearing, and the final pixel oracle; it is not a normal application FPS metric.
 Use the corresponding `display-quiet-*` cases for full pixel verification.
+
+
+`display-stages-{rgb565,xrgb8888,xrgb8888-native-tiled}` uses the same boundary
+checks and requires the client's stage-timing summary. Results add `source_ns`,
+`clear_ns`, `render_ns`, `verify_ns`, and `flip_wait_ns` totals. Divide the first
+three by `completed`, verification by `pixel_verified_frames`, and flip wait by
+`completed - 1`. Flip wait includes submission; all stages measure elapsed time,
+including scheduling delays. Presentation intervals have their own denominator
+(`completed - 2`). These averages therefore have different sample populations.
+The instrumented client also emits stages during fully checked display runs;
+old non-stage captures remain supported by non-stage cases.

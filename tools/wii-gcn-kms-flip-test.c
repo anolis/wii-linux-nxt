@@ -34,6 +34,7 @@ static bool rotate_rgb;
 static bool content_cycle;
 static bool boundary_checks;
 static unsigned int final_frame, verified_frames;
+static uint64_t source_ns, clear_ns, verify_ns;
 
 struct render_buffer {
 	struct drm_gcn_gem_create bo;
@@ -315,8 +316,9 @@ static int render_frame(int fd, __u32 ctx_id,
 	};
 	unsigned int x;
 	unsigned int y;
-	uint64_t start;
+	uint64_t start, end;
 
+	start = monotonic_ns();
 	for (y = 0; y < src->height; y++) {
 		for (x = 0; x < src->width; x++) {
 			uint32_t pixel = pattern_xrgb8888(x, y, frame,
@@ -330,9 +332,14 @@ static int render_frame(int fd, __u32 ctx_id,
 					xrgb8888_to_rgb565(pixel);
 		}
 	}
+	end = monotonic_ns();
+	source_ns += end - start;
+	start = end;
 	memset(dst->map, 0x5a,
 	       DST_WIDTH * DST_HEIGHT * sizeof(uint16_t));
-	start = monotonic_ns();
+	end = monotonic_ns();
+	clear_ns += end - start;
+	start = end;
 	if (native_tiled) {
 		for (y = 0; y < DST_HEIGHT; y += NATIVE_TILE_HEIGHT) {
 			for (x = 0; x < DST_WIDTH; x += NATIVE_TILE_WIDTH) {
@@ -364,6 +371,7 @@ static int render_frame(int fd, __u32 ctx_id,
 	if (boundary_checks && frame != 0 && frame != final_frame)
 		return 0;
 
+	start = monotonic_ns();
 	for (y = 0; y < DST_HEIGHT; y++) {
 		for (x = 0; x < DST_WIDTH; x++) {
 			unsigned int sx = native ? x :
@@ -385,6 +393,7 @@ static int render_frame(int fd, __u32 ctx_id,
 			}
 		}
 	}
+	verify_ns += monotonic_ns() - start;
 	verified_frames++;
 	if (boundary_checks)
 		printf("gcn-kms-flip-test: verified frame=%u\n", frame);
@@ -552,7 +561,7 @@ int main(int argc, char **argv)
 	uint64_t last_event_ns = 0, interval_total = 0, interval_min = UINT64_MAX, interval_max = 0;
 	unsigned int gaps[9] = {};
 	uint64_t max_render_ns = 0;
-	uint64_t total_render_ns = 0;
+	uint64_t total_render_ns = 0, flip_wait_ns = 0;
 	void *src_map = MAP_FAILED;
 	unsigned int completed = 0;
 	unsigned int created = 0;
@@ -671,7 +680,7 @@ int main(int argc, char **argv)
 			.user_data = frame,
 		};
 		__u32 sequence;
-		uint64_t render_ns, event_ns;
+		uint64_t render_ns, event_ns, flip_start;
 
 		if (render_frame(fd, ctx.id, &src, src_map, next, frame,
 				 native, native_tiled, &render_ns) < 0) {
@@ -681,6 +690,7 @@ int main(int argc, char **argv)
 		total_render_ns += render_ns;
 		if (render_ns > max_render_ns)
 			max_render_ns = render_ns;
+		flip_start = monotonic_ns();
 		if (xioctl(fd, DRM_IOCTL_MODE_PAGE_FLIP, &flip) < 0) {
 			perror("DRM_IOCTL_MODE_PAGE_FLIP");
 			goto out;
@@ -689,6 +699,7 @@ int main(int argc, char **argv)
 			perror("wait page-flip event");
 			goto out;
 		}
+		flip_wait_ns += monotonic_ns() - flip_start;
 		if (last_sequence && (__u32)(sequence - last_sequence) == 0) {
 			fprintf(stderr, "vblank sequence did not advance at frame %u\n",
 				frame);
@@ -725,6 +736,11 @@ int main(int argc, char **argv)
 			printf("%s%u", i ? "," : "", gaps[i]);
 		puts("");
 	}
+	printf("gcn-kms-flip-test: stages frames=%u verified=%u flips=%u source-ns=%llu clear-ns=%llu render-ns=%llu verify-ns=%llu flip-wait-ns=%llu\n",
+	       completed + 1, verified_frames, completed,
+	       (unsigned long long)source_ns, (unsigned long long)clear_ns,
+	       (unsigned long long)total_render_ns, (unsigned long long)verify_ns,
+	       (unsigned long long)flip_wait_ns);
 	if (boundary_checks)
 		printf("gcn-kms-flip-test: verification mode=boundary frames=%u\n", verified_frames);
 	printf("gcn-kms-flip-test: PASS format=%s frames=%u last-vblank=%u pixels=%u",

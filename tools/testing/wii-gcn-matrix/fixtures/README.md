@@ -63,3 +63,7 @@ missing restoration/accounting or inconsistent pacing counts.
 from `wii-gcn-matrix-display-paced-20260915-r1`. Only frames 0 and 119 are
 pixel-verified. Tests reject missing/wrong boundaries, inflated pixel totals,
 and substitution between full-oracle and boundary-only evidence.
+
+`display-stages-rgb565{,-client}.txt.gz`: 120-frame boundary-only stage profile
+from `wii-gcn-matrix-display-stages-20260915-r1`. Tests require a unique profile,
+correct frame/verification/flip counts, positive totals, and render-total agreement.
