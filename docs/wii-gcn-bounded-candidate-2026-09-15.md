@@ -1,6 +1,11 @@
 # Bounded scaling candidate — September 15, 2026
 
-Proposed loading preset for the next controlled application trial:
+Status: **installed and active on the Wii as of September 15, 2026**.
+See [the installation record](wii-gcn-bounded-installation-2026-09-15.md) for
+activation checks and rollback. The candidate notes below describe the
+pre-installation validation.
+
+Validated loading preset:
 
 ```text
 scale_bounded_final=1 scale_bounded_horizontal=1 scale_bounded_coord_cache=1 scale_bounded_log=0 scale_bounded_batch_quads=600
