@@ -2509,3 +2509,53 @@ Presentation client SHA256:
 `e452239c52aa428ad4a7aaaac965756a0fc8af2e234fc0d90fc1f5f60d7f228b`.
 The final current-audit rerun accepts all six successful cases. The visual
 archive has its own checksum manifest and sampling limitations in README.txt.
+
+
+## 2026-09-15: separate pixel-oracle overhead from presentation pacing
+
+Added opt-in `--boundary-checks` to the KMS flip client and matrix cases
+`display-paced-{rgb565,xrgb8888,xrgb8888-native-tiled}`. These check pixels only
+on the initial and final frames; all render waits and page-flip events remain
+checked. Default full-oracle behavior is unchanged. PASS pixel counts report
+only verified buffers, and the auditor rejects substituted evidence modes or
+missing/wrong boundary records. The generic `checked` count now also reports
+pixel-checked frames, distinct from `completed` presentations.
+
+Six paired cases (full oracle then boundary-only for each format), 120 frames
+per case, passed in `/media/anolis/dev/wii-gcn-matrix-display-paced-20260915-r1`.
+The unchanged temporary module SHA256 is
+`6b0b956f7a02c6e05b22351b86e82b928345affa95cad6bac39b36b071229f64`;
+new client SHA256 is
+`78a7a900a78a95e93474d503f5071c36b348cc965cc767a6b97b1b391f7cb5e9`.
+
+| Format | Full-oracle mean interval (ms) | Boundary mean interval (ms) | Full/boundary render mean (ms) |
+|---|---:|---:|---:|
+| RGB565 scaling | 166.268 | 67.582 | 22.044 / 22.274 |
+| XRGB8888 scaling | 165.702 | 68.713 | 23.231 / 24.128 |
+| Native tiled XRGB8888 | 238.374 | 168.247 | 78.982 / 72.617 |
+
+Each mean covers 118 event-to-event intervals, including the final pixel check.
+The RGB565 boundary run had 117 two-vblank gaps and one five-vblank gap; XRGB8888
+had 115 two-, one three-, and two five-vblank gaps. Native tiled had 114 five-,
+three six-, and one seven-vblank gaps. Removing the oracle therefore eliminates
+much of the earlier cadence penalty. This is one paired sweep, not a precision
+benchmark or normal application FPS measurement: CPU source-pattern generation,
+destination sentinel clearing, synchronous rendering, and display synchronization
+remain. Native tiled executes four identity blits and is a different workload.
+The next useful measurement is stage timing for source preparation, clearing,
+rendering, verification, and presentation wait, rather than more long fault runs.
+
+There were 720 presentations and 366 pixel-verified frames (112435200 destination
+pixel checks). Intermediate boundary-mode frames were not pixel-verified and
+must not count as additional clean pixel trials. No new physical-screen claim
+is made from this run. All cases restored the CRTC and recovered 524288 MEM1
+bytes; the same WiiDesk process (790) resumed on tty7. Boot UUID, printk and
+installed provider checksum remained unchanged; no module, matrix lock or
+tracefs mount remained. Strict client build and 93 audit/host tests passed.
+
+`reaudit.json` records all six raw captures re-audited with the final checked-count
+semantics. Original run summaries are retained unchanged (their generic `checked`
+field counted presentations; explicit pixel totals and `pixel_verified_frames`
+were already correct). `SHA256SUMS` covers the complete archive, including raw
+captures, archived sources, original summaries and re-audit. A real RGB565
+boundary capture is included as a regression fixture.

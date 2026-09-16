@@ -905,6 +905,27 @@ class AuditTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 matrix.audit_presentation(log,bad,spec,120,0)
 
+    def test_display_boundary_checks_are_not_full_pixel_coverage(self):
+        log, client = [gzip.decompress((FIXTURES/(name+'.txt.gz')).read_bytes()).decode()
+            for name in ('display-paced-rgb565','display-paced-rgb565-client')]
+        spec = CASES['display-paced-rgb565']
+        result = matrix.audit_presentation(log, client, spec, 120, 0)
+        self.assertEqual(result['pixel_verified_frames'], 2)
+        self.assertEqual(result['checked'], 2)
+        self.assertEqual(result['client_pixels_checked'], 614400)
+        self.assertEqual(result['completed'], 120)
+        for bad in (client.replace('verified frame=119','verified frame=118'),
+                    client.replace('verified frame=0','missing'),
+                    client.replace('frames=2\n','frames=120\n'),
+                    client.replace('pixels=614400','pixels=36864000')):
+            with self.assertRaises(ValueError):
+                matrix.audit_presentation(log, bad, spec, 120, 0)
+        with self.assertRaises(ValueError):
+            matrix.audit_presentation(log, client, CASES['display-quiet-rgb565'], 120, 0)
+        full = gzip.decompress((FIXTURES/'display-rgb565-client.txt.gz').read_bytes()).decode()
+        with self.assertRaises(ValueError):
+            matrix.audit_presentation(log, full, spec, 120, 0)
+
     def test_quiet_capture_requires_parameters_and_does_not_invent_batch_evidence(self):
         log, client = [gzip.decompress((FIXTURES / (name+'.txt.gz')).read_bytes()).decode()
             for name in ('bounded-quiet','bounded-quiet-client')]

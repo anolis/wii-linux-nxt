@@ -58,3 +58,8 @@ attempts to treat this as a full batch-evidence capture.
 `wii-gcn-matrix-display-20260915-screen-r2`. Includes 118 presentation intervals,
 full buffer pixel verification, CRTC restoration, and MEM1 recovery. Tests reject
 missing restoration/accounting or inconsistent pacing counts.
+
+`display-paced-rgb565{,-client}.txt.gz`: 120-frame boundary-only KMS capture
+from `wii-gcn-matrix-display-paced-20260915-r1`. Only frames 0 and 119 are
+pixel-verified. Tests reject missing/wrong boundaries, inflated pixel totals,
+and substitution between full-oracle and boundary-only evidence.

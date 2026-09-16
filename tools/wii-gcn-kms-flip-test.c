@@ -32,6 +32,8 @@
 static bool swap_red_white;
 static bool rotate_rgb;
 static bool content_cycle;
+static bool boundary_checks;
+static unsigned int final_frame, verified_frames;
 
 struct render_buffer {
 	struct drm_gcn_gem_create bo;
@@ -359,6 +361,9 @@ static int render_frame(int fd, __u32 ctx_id,
 		return -1;
 	*render_ns = monotonic_ns() - start;
 
+	if (boundary_checks && frame != 0 && frame != final_frame)
+		return 0;
+
 	for (y = 0; y < DST_HEIGHT; y++) {
 		for (x = 0; x < DST_WIDTH; x++) {
 			unsigned int sx = native ? x :
@@ -380,6 +385,9 @@ static int render_frame(int fd, __u32 ctx_id,
 			}
 		}
 	}
+	verified_frames++;
+	if (boundary_checks)
+		printf("gcn-kms-flip-test: verified frame=%u\n", frame);
 	return 0;
 }
 
@@ -552,11 +560,13 @@ int main(int argc, char **argv)
 	int fd = -1;
 	int ret = EXIT_FAILURE;
 
-	if (argc > 6 || (argc > 4 && !offscreen) ||
+	boundary_checks = argc == 5 && !strcmp(argv[4], "--boundary-checks");
+	final_frame = flip_count;
+	if (argc > 6 || (argc > 4 && !offscreen && !boundary_checks) ||
 	    (argc > 5 && strcmp(argv[5], "--swap-red-white") &&
 	     strcmp(argv[5], "--rotate-rgb") && strcmp(argv[5], "--content-cycle"))) {
 		fprintf(stderr,
-			"usage: %s [card [count [format [--offscreen [--swap-red-white|--rotate-rgb|--content-cycle]]]]]\n",
+			"usage: %s [card [count [format [--boundary-checks|--offscreen [--swap-red-white|--rotate-rgb|--content-cycle]]]]]\n",
 			argv[0]);
 		return EXIT_FAILURE;
 	}
@@ -715,9 +725,11 @@ int main(int argc, char **argv)
 			printf("%s%u", i ? "," : "", gaps[i]);
 		puts("");
 	}
+	if (boundary_checks)
+		printf("gcn-kms-flip-test: verification mode=boundary frames=%u\n", verified_frames);
 	printf("gcn-kms-flip-test: PASS format=%s frames=%u last-vblank=%u pixels=%u",
 	       source_format_name(src_format, native, native_tiled), completed + 1,
-	       last_sequence, (completed + 1) * DST_WIDTH * DST_HEIGHT);
+	       last_sequence, verified_frames * DST_WIDTH * DST_HEIGHT);
 	printf(" render-us-avg=%llu render-us-max=%llu\n",
 	       (unsigned long long)(total_render_ns / (completed + 1) / 1000),
 	       (unsigned long long)(max_render_ns / 1000));

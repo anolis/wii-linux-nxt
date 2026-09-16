@@ -195,6 +195,10 @@ for format_name in ('rgb565', 'xrgb8888', 'xrgb8888-native-tiled'):
     CASES.append(dict(case(f'display-quiet-{format_name}', [], '', 0, 0),
                       presentation=True, display_format=format_name, experimental=True))
 
+for format_name in ('rgb565', 'xrgb8888', 'xrgb8888-native-tiled'):
+    CASES.append(dict(case(f'display-paced-{format_name}', [], '', 0, 0),
+                      presentation=True, boundary_checks=True, display_format=format_name, experimental=True))
+
 CASES.append(dict(case('render-regression', [], '', 0, 0), regression=True, experimental=True))
 CASES.append(dict(case('bounded-final-regression', [], '', 0, 0), regression=True, bounded=True, experimental=True))
 for workload in ('offset', 'system', 'reduce-content'):
@@ -288,22 +292,30 @@ def audit_presentation(log, client, spec, requested, rc):
         completed = int(failure[1])
         require(completed < requested and (not completed or
                 client.count('restored previous console framebuffer') == 1), 'failed display cleanup/count mismatch')
+        if spec.get('boundary_checks'):
+            require(completed in (0, requested-1), 'pixel failure outside checked boundaries')
         return dict(case=spec['name'],status='FAIL',requested=requested,completed=completed,
-                    checked=completed+1,first_pixel=f'{failure[2]},{failure[3]}',first_record=failure[0],
+                    checked=(1 if completed == 0 else 2) if spec.get('boundary_checks') else completed+1,first_pixel=f'{failure[2]},{failure[3]}',first_record=failure[0],
                     raw_errors=None,copy_errors=None)
     require(not failure, 'display success despite pixel mismatch')
     require(client.count('restored previous console framebuffer') == 1, 'CRTC restoration missing')
+    verified_frames = 2 if spec.get('boundary_checks') else requested
+    if spec.get('boundary_checks'):
+        require(re.findall(r'gcn-kms-flip-test: verified frame=(\d+)',client) == ['0',str(requested-1)]
+                and client.count('verification mode=boundary frames=2') == 1, 'wrong boundary verification')
+    else:
+        require('verification mode=boundary' not in client, 'boundary mode in fully checked capture')
     rows = re.findall(r'gcn-kms-flip-test: PASS format=(\S+) frames=(\d+) last-vblank=(\d+) pixels=(\d+) render-us-avg=(\d+) render-us-max=(\d+)',client)
     require(len(rows)==1 and rows[0][0]==spec['display_format'] and int(rows[0][1])==requested
-            and int(rows[0][3])==requested*307200 and 0<int(rows[0][4])<=int(rows[0][5]), 'wrong display completion')
+            and int(rows[0][3])==verified_frames*307200 and 0<int(rows[0][4])<=int(rows[0][5]), 'wrong display completion')
     pace = re.findall(r'pacing intervals=(\d+) total-ns=(\d+) min-ns=(\d+) max-ns=(\d+) gaps=([0-9,]+)',client)
     require(len(pace)==1, 'missing presentation pacing')
     n,total,minimum,maximum=map(int,pace[0][:4]);gaps=list(map(int,pace[0][4].split(',')))
     require(n==requested-2 and n>0 and len(gaps)==9 and sum(gaps)==n
             and 0<minimum<=maximum and n*minimum<=total<=n*maximum,'invalid presentation pacing')
-    return dict(case=spec['name'],status='PASS',requested=requested,completed=requested,checked=requested,
-                client_pixels_checked=requested*307200,raw_errors=None,copy_errors=None,
-                evidence_mode='verified-buffers-and-KMS-events',physical_screen_verified=False,
+    return dict(case=spec['name'],status='PASS',requested=requested,completed=requested,checked=verified_frames,
+                client_pixels_checked=verified_frames*307200,pixel_verified_frames=verified_frames,raw_errors=None,copy_errors=None,
+                evidence_mode='boundary-verified-buffers-and-KMS-events' if spec.get('boundary_checks') else 'verified-buffers-and-KMS-events',physical_screen_verified=False,
                 render_us_avg=int(rows[0][4]),render_us_max=int(rows[0][5]),
                 presentation_intervals=n,presentation_total_ns=total,presentation_min_ns=minimum,
                 presentation_max_ns=maximum,vblank_gap_histogram=gaps)
@@ -1118,7 +1130,7 @@ def main():
                 if spec.get('presentation'):
                     command = ['tools/wii-gcn-render-cycle.sh', '--host', args.host, '--module', str(module),
                                '--client', str(directory / 'render-client'), '--quiet-kernel',
-                               '--client-args', f'/dev/dri/card0 {args.iterations-1} {spec["display_format"]}',
+                               '--client-args', f'/dev/dri/card0 {args.iterations-1} {spec["display_format"]}' + (' --boundary-checks' if spec.get('boundary_checks') else ''),
                                '--module-args', 'scale_bounded_final=1 scale_bounded_horizontal=1 scale_bounded_coord_cache=1 scale_bounded_log=0']
                     for name,value in (('scale_bounded_final','Y'),('scale_bounded_horizontal','Y'),
                                        ('scale_bounded_coord_cache','Y'),('scale_bounded_log','N')):

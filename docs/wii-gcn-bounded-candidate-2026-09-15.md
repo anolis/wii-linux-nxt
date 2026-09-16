@@ -44,3 +44,12 @@ The installed rollback provider has remained untouched:
 Any later persistent installation must retain that exact binary and its prior
 configuration as the rollback point. No persistent installation was performed
 for this validation.
+
+
+Follow-up pacing comparison: all six 120-frame full-oracle/boundary-only cases
+passed (720 presentations, 366 pixel-verified frames). Boundary-only mean
+intervals were 67.582 ms RGB565, 68.713 ms XRGB8888 and 168.247 ms native tiled,
+versus 166.268, 165.702 and 238.374 ms with full checking. This isolates substantial
+validation overhead but still includes CPU preparation and synchronous display
+work; it does not establish normal application FPS. See the investigation report
+for capture provenance and exact evidence limits. The loading preset is unchanged.

@@ -895,3 +895,19 @@ Cadence includes source generation and a full CPU pixel oracle per frame; it is
 not a normal-application FPS benchmark. These captures prove buffer contents and
 KMS event delivery; physical appearance is separate evidence from the VLC feed
 or a human observer. No kernel batch evidence is claimed for quiet presentation.
+
+
+### Display pacing with boundary pixel checks
+
+Use `display-paced-rgb565`, `display-paced-xrgb8888`, and
+`display-paced-xrgb8888-native-tiled` with `--render-client` pointing to the
+KMS flip client. `--iterations 120` presents 120 frames but checks pixels only
+on frames 0 and 119. The client option is `--boundary-checks`; the standalone
+client count remains the number of flips (119 for 120 frames).
+
+These cases retain all render/event/cleanup checks and the quiet cached bounded
+preset. Results distinguish `completed` presentations from `checked` /
+`pixel_verified_frames` and `client_pixels_checked`. Boundary results cannot be
+used as 120-frame pixel-fault qualification. Timing includes source generation,
+clearing, and the final pixel oracle; it is not a normal application FPS metric.
+Use the corresponding `display-quiet-*` cases for full pixel verification.
