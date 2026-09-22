@@ -9,3 +9,5 @@ snd-powermac-y := powermac.o pmac.o awacs.o burgundy.o daca.o tumbler.o keywest.
 # Toplevel Module Dependency
 obj-$(CONFIG_SND_POWERMAC)	+= snd-powermac.o
 obj-$(CONFIG_SND_PS3)		+= snd_ps3.o
+snd-gcn-ai-y := gcn-ai.o
+obj-$(CONFIG_SND_GAMECUBE)	+= snd-gcn-ai.o

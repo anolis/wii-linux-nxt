@@ -10,6 +10,14 @@ menuconfig SND_PPC
 
 if SND_PPC
 
+config SND_GAMECUBE
+	tristate "Nintendo GameCube/Wii audio playback"
+	depends on GAMECUBE_COMMON && OF
+	select SND_PCM
+	help
+	  Stereo 16-bit playback at 32 or 48 kHz through the console's
+	  audio DMA interface. The module is called snd-gcn-ai.
+
 config SND_POWERMAC
 	tristate "PowerMac (AWACS, DACA, Burgundy, Tumbler, Keywest)"
 	depends on I2C && INPUT && PPC_PMAC
