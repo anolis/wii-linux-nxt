@@ -102,3 +102,85 @@ completion all reported the expected states with no XRUN/ERROR. The user
 confirmed correct left/right channels and clean audible pause/resume.
 The subsequent 32 kHz stereo tone at 10% completed in 3.022 seconds without
 underruns; the user confirmed clean sound with no crackling or dropouts.
+
+## Load testing — September 22
+
+`tools/wii-gcn-audio-sweep.sh CLIENT READ_FIXTURE [RESULT_DIRECTORY]` runs
+12 silent eight-second cases as the ordinary audio user: 32/48 kHz,
+480-frame/four-period and 1024-frame/eight-period rings, each at idle,
+under CPU load (`sha256sum /dev/zero`) and under repeated direct reads of
+an existing file. Workloads are bounded and cleaned up; output is a compact
+progress count with per-case logs and a TSV summary. Direct-read support is
+checked before starting. No caches are dropped and no storage is overwritten.
+
+First sweep `/var/tmp/wii-audio-sweep.f7H7cJ`: 11/12 passed. The 32 kHz
+60 ms ring underrran under CPU load; all idle, larger-ring, and disk-load
+cases passed. This is a deliberately mixed test matrix, not an estimate
+of a normal-use failure probability.
+
+WiiDesk's installed 100 ms worker also reported an XRUN under CPU load:
+`/var/tmp/wii-audio-driver-20260921/cpu-worker-48k.log` and the MP3 control
+test `/var/tmp/wiidesk-audio-test.2PEpBR`. A staged 160 ms/140 ms producer-lead
+candidate still underrran in one of five eight-second 48 kHz runs
+(`buffer160/cpu-48k-2.log`). It was not deployed; source defaults remain
+100 ms. Buffer enlargement alone is not a validated fix.
+
+The experimental driver now exposes per-prepare nominal period time,
+maximum interrupt gap, gaps over 1.5 periods, and backward pointer-report
+counts in its existing proc entry. These diagnostics do not change DMA
+or pointer behavior; they distinguish evidence of IRQ delay from position
+accounting faults. A long IRQ gap is not by itself proof of a lost period.
+
+The diagnostic module (`timing/snd-gcn-ai.ko`, SHA-256
+`cdffba21a68e2aa2a9f00c2bd19442ba729b4e844ed9059edc7ccecc4c0c3251`)
+passed four ten-second CPU-loaded runs with no pointer rewinds. Three had
+maximum interrupt gaps of 31.2–38.8 ms against a 15 ms period. A subsequent
+run underrran after 191 completed periods, recording a 51.048 ms maximum
+gap and nine gaps above 1.5 periods, still with zero pointer rewinds
+(`timing/cpu-long.log`). This supports investigating interrupt latency;
+it does not yet identify which kernel path caused the delay.
+
+A traced 60-second repeat passed, with a 35.257 ms maximum gap and no
+pointer rewinds. The 1 MiB rolling IRQ trace retained only the final
+18.4 seconds, which did not include the long gap. In that retained window,
+the largest audio IRQ gap was 15.058 ms and all traced handlers finished
+within 0.110 ms. Do not attribute the earlier delay to MMC, graphics, or
+audio IRQ handlers based on this trace. Local trace copy:
+`/media/anolis/dev/wii-audio-module/irq-trace-20260922.txt.gz`.
+
+### Captured source of an audio interrupt delay
+
+The corrected trigger waits for `running=1` before checking `late_irqs`,
+freezes tracing on the first late interval, and waits for playback to end
+before saving the trace. It retained all 15,518 events (no overwrite).
+The 30-second run passed in 30.023 seconds but captured this sequence:
+
+| Timestamp (seconds) | Event |
+| --- | --- |
+| 27261.209005 | gcn-ai IRQ entry |
+| 27261.211307 | mmc0 IRQ entry, interrupted task jbd2/mmcblk0p2 |
+| 27261.242366 | mmc0 IRQ exit, after 31.059 ms |
+| 27261.242379 | gcn-ai IRQ entry, after a 33.374 ms audio gap |
+
+Trace flags show interrupts disabled throughout that mmc0 handler. The
+largest mmc0 handler in this capture took 31.120 ms. Thus SD-card hard-IRQ
+latency is a demonstrated source of audio delays, although this passing
+run cannot prove that every earlier underrun had exactly the same cause.
+The trace is `/media/anolis/dev/wii-audio-module/irq-triggered-v2-20260922.txt.gz`
+and `timing/triggered-v2-trace.txt.gz` on the Wii.
+
+Source inspection explains a plausible mechanism: Hollywood uses PIO,
+`sdhci_transfer_pio()` drains all currently available blocks in the IRQ,
+and the Hollywood accessor delays five microseconds after every write,
+including 32-bit FIFO writes. The trace identifies the handler but does
+not separately instrument that internal loop. Next: bound Hollywood
+SD-card PIO work (for example through bounded requests), preserve the
+required register delays, and measure both worst-case IRQ time and storage
+throughput on a recoverable test kernel before adopting the change.
+
+The first trigger attempt was invalid: stale counters stopped it before
+audio started. Its 278 ms maximum must not be used for attribution because
+it also saved tracing data during playback. It is superseded by v2.
+Tracing and synthetic load processes have been stopped; the trace buffer
+was reduced and tracefs unmounted. No boot configuration or player-buffer
+default was changed.

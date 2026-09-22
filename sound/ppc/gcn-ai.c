@@ -11,6 +11,8 @@
 #include <linux/dma-mapping.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
+#include <linux/ktime.h>
+#include <linux/math64.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
@@ -51,6 +53,13 @@ struct gcn_ai {
 	u64 periods;
 	u64 starts;
 	u64 stops;
+	u64 period_ns;
+	u64 last_irq_ns;
+	u64 max_irq_gap_ns;
+	u64 late_irqs;
+	u64 stream_periods;
+	u64 last_pointer;
+	u64 pointer_rewinds;
 };
 
 static const struct snd_pcm_hardware gcn_ai_hardware = {
@@ -122,11 +131,22 @@ static irqreturn_t gcn_ai_interrupt(int irq, void *data)
 	chip->interrupts++;
 	gcn_ai_irq_control(chip, chip->running, true);
 	if (chip->running) {
+		u64 now = ktime_get_ns();
+
+		if (chip->last_irq_ns) {
+			u64 gap = now - chip->last_irq_ns;
+
+			chip->max_irq_gap_ns = max(chip->max_irq_gap_ns, gap);
+			if (gap > chip->period_ns + chip->period_ns / 2)
+				chip->late_irqs++;
+		}
+		chip->last_irq_ns = now;
 		if (chip->first) {
 			chip->first = false;
 		} else {
 			chip->current = chip->queued;
 			chip->periods++;
+			chip->stream_periods++;
 			elapsed = chip->substream;
 		}
 		next = chip->current + chip->period_bytes;
@@ -190,6 +210,14 @@ static int gcn_ai_prepare(struct snd_pcm_substream *substream)
 	chip->buffer_bytes = snd_pcm_lib_buffer_bytes(substream);
 	chip->current = 0;
 	chip->queued = 0;
+	chip->period_ns = div_u64((u64)runtime->period_size * NSEC_PER_SEC,
+				 runtime->rate);
+	chip->last_irq_ns = 0;
+	chip->max_irq_gap_ns = 0;
+	chip->late_irqs = 0;
+	chip->stream_periods = 0;
+	chip->last_pointer = 0;
+	chip->pointer_rewinds = 0;
 	rate = ioread32be(chip->ai + AI_CONTROL);
 	if (runtime->rate == 32000)
 		rate |= AI_RATE_32K;
@@ -234,6 +262,7 @@ static snd_pcm_uframes_t gcn_ai_pointer(struct snd_pcm_substream *substream)
 	struct gcn_ai *chip = snd_pcm_substream_chip(substream);
 	unsigned long flags;
 	u32 offset, left, pending;
+	u64 absolute;
 
 	spin_lock_irqsave(&chip->lock, flags);
 	offset = chip->current;
@@ -248,8 +277,14 @@ static snd_pcm_uframes_t gcn_ai_pointer(struct snd_pcm_substream *substream)
 		}
 		if (pending)
 			offset = chip->queued;
+		absolute = (chip->stream_periods + !!pending) * chip->period_bytes;
 		if (left <= chip->period_bytes)
 			offset += chip->period_bytes - left;
+		if (left <= chip->period_bytes)
+			absolute += chip->period_bytes - left;
+		if (absolute < chip->last_pointer)
+			chip->pointer_rewinds++;
+		chip->last_pointer = absolute;
 	}
 	if (chip->buffer_bytes && offset >= chip->buffer_bytes)
 		offset -= chip->buffer_bytes;
@@ -271,6 +306,7 @@ static void gcn_ai_proc_read(struct snd_info_entry *entry,
 	struct gcn_ai *chip = entry->private_data;
 	unsigned long flags;
 	u64 interrupts, periods, starts, stops;
+	u64 period_ns, max_irq_gap_ns, late_irqs, pointer_rewinds;
 	u32 current, queued, period_bytes, buffer_bytes, rate;
 	u16 csr, len, left;
 	dma_addr_t dma;
@@ -281,6 +317,10 @@ static void gcn_ai_proc_read(struct snd_info_entry *entry,
 	periods = chip->periods;
 	starts = chip->starts;
 	stops = chip->stops;
+	period_ns = chip->period_ns;
+	max_irq_gap_ns = chip->max_irq_gap_ns;
+	late_irqs = chip->late_irqs;
+	pointer_rewinds = chip->pointer_rewinds;
 	current = chip->current;
 	queued = chip->queued;
 	period_bytes = chip->period_bytes;
@@ -300,6 +340,8 @@ static void gcn_ai_proc_read(struct snd_info_entry *entry,
 		    &dma, buffer_bytes, period_bytes, current, queued);
 	snd_iprintf(buffer, "csr=%04x length=%04x left=%04x ai=%08x\n",
 		    csr, len, left, rate);
+	snd_iprintf(buffer, "period_ns=%llu max_irq_gap_ns=%llu late_irqs=%llu pointer_rewinds=%llu\n",
+		    period_ns, max_irq_gap_ns, late_irqs, pointer_rewinds);
 }
 
 static void gcn_ai_card_free(struct snd_card *card)
