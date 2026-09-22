@@ -42,7 +42,7 @@ Staging: `/var/tmp/wii-audio-driver-20260921` on the Wii.
 `tools/wii-gcn-audio-test.c` accepts:
 
 ```
-wii-gcn-audio-test DEVICE RATE SECONDS PERIOD_FRAMES PERIODS silence|tone [rw|mmap]
+wii-gcn-audio-test DEVICE RATE SECONDS PERIOD_FRAMES PERIODS silence|tone|left|right [rw|mmap [VOLUME_PERCENT]]
 ```
 
 It uses nonblocking ALSA, fails on underruns instead of recovering them,
@@ -85,3 +85,20 @@ validated by elapsed wall time alone.
    already-working video path speculatively.
 4. Only then enable the module in the image configuration, install it with
    depmod, verify cold-boot autoload, and refresh the WiiDesk OS image.
+
+## Audible follow-up — September 22
+
+The user confirmed audible output from a five-second 48 kHz stereo tone
+at the requested 10% digital amplitude. It completed in 5.036 seconds
+without underruns. This confirms sound reaches the user's listening path;
+it does not by itself establish channel order or eliminate intermittent faults.
+
+The test client now accepts separate left/right tones and an optional
+0–100% amplitude (the existing default remains 1200/32767). Two-second
+left and right tests at 10% completed in 2.025 and 2.012 seconds without
+underruns. A full-scale stereo WAV played through WiiDesk's worker with
+`V 10` queued before playback; pause, resume, seek to 6000 ms, and natural
+completion all reported the expected states with no XRUN/ERROR. The user
+confirmed correct left/right channels and clean audible pause/resume.
+The subsequent 32 kHz stereo tone at 10% completed in 3.022 seconds without
+underruns; the user confirmed clean sound with no crackling or dropouts.

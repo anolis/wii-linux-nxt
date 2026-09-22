@@ -29,21 +29,34 @@ int main(int argc, char **argv)
 	unsigned long frames, sent = 0;
 	unsigned char samples[16384];
 	double began, elapsed;
-	int ret, direction = 0, tone, mmap_mode;
+	int ret, direction = 0, tone, mmap_mode, channel = -1;
+	double amplitude = 1200;
 
-	if (argc != 7 && argc != 8) {
-		fprintf(stderr, "Usage: %s DEVICE RATE SECONDS PERIOD_FRAMES PERIODS silence|tone [rw|mmap]\n", argv[0]);
+	if (argc < 7 || argc > 9) {
+		fprintf(stderr, "Usage: %s DEVICE RATE SECONDS PERIOD_FRAMES PERIODS silence|tone|left|right [rw|mmap [VOLUME_PERCENT]]\n", argv[0]);
 		return 2;
 	}
 	rate = strtoul(argv[2], NULL, 10);
 	duration = strtoul(argv[3], NULL, 10);
 	period = strtoul(argv[4], NULL, 10);
 	periods = strtoul(argv[5], NULL, 10);
-	tone = !strcmp(argv[6], "tone");
-	mmap_mode = argc == 8 && !strcmp(argv[7], "mmap");
+	if (!strcmp(argv[6], "left"))
+		channel = 0;
+	else if (!strcmp(argv[6], "right"))
+		channel = 1;
+	tone = channel >= 0 || !strcmp(argv[6], "tone");
+	mmap_mode = argc >= 8 && !strcmp(argv[7], "mmap");
 	if ((!tone && strcmp(argv[6], "silence")) ||
-	    (argc == 8 && !mmap_mode && strcmp(argv[7], "rw")))
+	    (argc >= 8 && !mmap_mode && strcmp(argv[7], "rw")))
 		return 2;
+	if (argc == 9) {
+		char *end;
+		long volume = strtol(argv[8], &end, 10);
+
+		if (!argv[8][0] || *end || volume < 0 || volume > 100)
+			return 2;
+		amplitude = 32767.0 * volume / 100;
+	}
 	if ((rate != 32000 && rate != 48000) || !duration || duration > 120 ||
 	    period < 256 || period > 4096 || periods < 2 || periods > 32)
 		return 2;
@@ -75,7 +88,7 @@ int main(int argc, char **argv)
 	CHECK(snd_pcm_sw_params_set_avail_min(pcm, sw, period));
 	CHECK(snd_pcm_sw_params(pcm, sw));
 	printf("rate=%u period=%lu buffer=%lu frames=%lu mode=%s\n",
-	       rate, period, buffer, frames, tone ? "tone" : "silence");
+	       rate, period, buffer, frames, argv[6]);
 	fflush(stdout);
 	began = seconds();
 	while (sent < frames) {
@@ -86,7 +99,7 @@ int main(int argc, char **argv)
 		for (unsigned long i = 0; i < chunk; i++) {
 			/* Quiet stereo markers: 440 Hz left, 660 Hz right. */
 			for (unsigned int ch = 0; ch < 2; ch++) {
-				int16_t sample = tone ? (int16_t)(1200 *
+				int16_t sample = tone && (channel < 0 || channel == (int)ch) ? (int16_t)(amplitude *
 					sin(2 * 3.141592653589793 * (ch ? 660 : 440) *
 					    (sent + i) / rate)) : 0;
 				unsigned int at = i * 4 + ch * 2;
