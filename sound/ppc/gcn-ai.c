@@ -71,7 +71,7 @@ static const struct snd_pcm_hardware gcn_ai_hardware = {
 	.rate_max = 48000,
 	.channels_min = 2,
 	.channels_max = 2,
-	.buffer_bytes_max = 32768,
+	.buffer_bytes_max = 65536,
 	.period_bytes_min = 1024,
 	.period_bytes_max = 16384,
 	.periods_min = 2,
@@ -419,7 +419,7 @@ static int gcn_ai_probe(struct platform_device *pdev)
 	strscpy(pcm->name, "AI playback");
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &gcn_ai_ops);
 	ret = snd_pcm_set_managed_buffer_all(pcm, SNDRV_DMA_TYPE_DEV, dev,
-					     32768, 32768);
+					     65536, 65536);
 	if (ret)
 		goto error;
 	snd_card_ro_proc_new(card, "ai", chip, gcn_ai_proc_read);

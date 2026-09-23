@@ -184,3 +184,71 @@ it also saved tracing data during playback. It is superseded by v2.
 Tracing and synthetic load processes have been stopped; the trace buffer
 was reduced and tracefs unmounted. No boot configuration or player-buffer
 default was changed.
+
+## Request bounding and installed mitigation — September 22–23
+
+The block queue's existing `max_sectors_kb` control provided a reversible
+way to test smaller requests without replacing the running boot kernel.
+`tools/wii-gcn-audio-storage-test.sh CLIENT [BASELINE_KIB]` compares the
+selected baseline (default: current limit) with 4 KiB, restores the previous
+limit, and checks the test file's SHA-256. The return status requires the
+4 KiB audio case to pass; a failing baseline is retained as a control.
+
+During direct writes/reads of a dedicated four-MiB file and 20 seconds of
+48 kHz silent playback with a 40 ms ring:
+
+| Request cap | Audio | Maximum IRQ gap | Write/read throughput |
+| --- | --- | --- | --- |
+| 512 KiB | Underrun | 92.652 ms | 678 kB/s / 17.6 MB/s |
+| 8 KiB | Underrun | 19.716 ms | 617 kB/s / 10.0 MB/s |
+| 4 KiB, run 1 | Pass | 15.189 ms | 538 kB/s / 6.3 MB/s |
+| 4 KiB, run 2 | Pass | 15.147 ms | 516 kB/s / 6.4 MB/s |
+
+All four file hashes matched. Evidence: `/var/tmp/wii-audio-storage.iQjIL6`
+and `/var/tmp/wii-audio-storage.kHSuap`. This demonstrates a latency/throughput
+tradeoff on the tested card, not a general performance guarantee.
+
+The installed WiiDesk OS udev rule now applies the 4 KiB cap only to whole
+MMC disks whose parent driver is `sdhci-hlwd`. Syntax verification and a
+targeted udev change event passed, with the queue reporting `4`. Source and
+rollback details are in `wiidesk-os/docs/sd-audio-latency.md`. The required
+register delays remain unchanged. A future write-side kernel optimization
+may retain more read throughput; this policy is a mitigation, not that fix.
+
+The audio driver now preallocates 64 KiB rather than 32 KiB. The player
+requests a 250 ms ring (48,000 bytes at 48 kHz), fills available PCM space
+before waiting, and retains bounded producer lead. This adds 32 KiB of
+fixed DMA allocation. Wii defconfig enables `CONFIG_SND_GAMECUBE=m`; an
+isolated defconfig generation confirmed both SND_PPC and SND_GAMECUBE.
+
+### Load-test methodology correction
+
+Early combined CPU/storage/player tests redirected frequent player status
+updates to the SD card under test. That synchronous log sink can itself
+block the worker; the desktop instead uses a status pipe. Those results
+cannot isolate the effect of changing playback buffer size. The final
+`tools/wii-gcn-audio-player-load-test.sh` keeps live logs in tmpfs, persists
+them only after stopping load, and holds worker stdin open to natural
+completion. It accepts `WIIDESK_TEST_WORKER` and `WIIDESK_AUDIO_LOAD_RUNS=0..5`
+(zero repeats only the control checks). Its audio source remains on SD;
+the separate short WAV/MP3 control fixtures/logs are copied into tmpfs.
+
+With corrected logging, five eight-second 48 kHz WAV runs passed under
+simultaneous CPU hashing and repeated direct SD writes/reads: no XRUN/ERROR,
+all natural completions (`/var/tmp/wii-audio-player-load.JD1eV7`). The first
+run recorded a 588 ms maximum decode/write gap without an underrun; these
+metrics include startup before PCM playback begins.
+The control test initially raced worker exit after a successful completion;
+after correcting its wait, WAV/MP3 pause/seek/resume/end and missing-device
+checks passed under both loads (`/var/tmp/wii-audio-player-load.3d5nEq`,
+details `/dev/shm/wiidesk-audio-test.NtnNSZ`). These short tests do not prove
+zero failures under arbitrary load.
+
+The matching module is installed in `/lib/modules/6.18.40-wii+/extra` with
+depmod, and reload through modprobe passed. Both 32/48 kHz MMAP tests using
+the full 64 KiB ring passed in 3.013/3.032 seconds, including allocation in
+MEM1 after earlier MEM2 testing. No late IRQ or backward pointer report
+occurred in the final 48 kHz check. Module SHA-256:
+`fd37b07beecb46c720a27ad1534be8411288bb8028bd05b54045fa5bd6e780e0`.
+The updated player is installed with its predecessor backed up. The running
+boot kernel is unchanged; cold-boot autoload and full OS image refresh remain.
